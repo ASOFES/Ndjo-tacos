@@ -1,0 +1,5217 @@
+Oui. Votre idée est déjà très bonne, mais pour NDJO TACOS je vous recommande de ne pas concevoir l’application comme une simple application de caisse. Il faut plutôt la penser comme un système intégré de gestion du restaurant, du stock, des ventes et des livraisons, avec fonctionnement en ligne et hors connexion.
+
+1. Architecture générale proposée
+
+L’application pourrait avoir ces modules :
+
+NDJO TACOS
+
+🏪 Gestion du restaurant
+📦 Gestion du stock/dépôt
+🛒 Vente / caisse
+🍔 Cuisine
+🛵 Livraison
+👥 Gestion des utilisateurs
+💰 Finance / rapports
+📊 Tableau de bord
+⚙️ Administration
+2. Niveaux d'accès
+
+Je vous conseille au minimum :
+
+Profil	Principales permissions
+Administrateur	Accès complet, utilisateurs, produits, prix, stocks, rapports, paramètres
+Caissier/Vendeur	Enregistrer les commandes et ventes, paiements, tickets
+Magasinier	Entrées, sorties, inventaires, mouvements de stock
+Cuisinier	Voir les commandes à préparer et signaler leur préparation
+Livreur	Voir les livraisons, récupérer une commande, confirmer la livraison
+Gestionnaire	Consultation des ventes, stocks, bénéfices, rapports
+Client	Catalogue, panier, commande, livraison, historique
+
+L'administrateur devrait pouvoir créer des rôles personnalisés et définir les permissions.
+
+3. Votre catalogue : je modifierais légèrement votre conception
+
+Pour chaque produit, il faudrait distinguer le produit et son lot.
+
+Par exemple :
+
+Produit : Coca-Cola
+
+Puis :
+
+Lot : CC-202609-001
+Date d'entrée : 13/09/2026
+Date de péremption : 13/03/2027
+Prix d'achat : 1 000 FC
+Prix de vente : 1 500 FC
+Format : Unitaire
+Volume : 330 ml
+Quantité : 48
+Catégorie : Boisson
+
+Ainsi, si NDJO TACOS reçoit 48 Coca-Cola aujourd'hui puis 100 autres demain, l'application sait exactement quel lot est entré quand, à quel prix et avec quelle date de péremption.
+
+4. Très important : la série
+
+Votre idée de série est excellente.
+
+Je recommande cependant d'avoir deux niveaux d'identification :
+
+Produit
+
+Code produit : BOI-COC-330
+
+Lot
+
+Série/Lot : NDJ-COC-20260913-001
+
+Et éventuellement un code-barres ou QR code.
+
+Le magasinier peut donc scanner :
+
+NDJ-COC-20260913-001
+
+et l'application affiche immédiatement :
+
+Coca-Cola 330 ml
+Lot : NDJ-COC-20260913-001
+Entrée : 13/09/2026
+Péremption : 13/03/2027
+Stock initial : 48
+Stock actuel : 36
+
+5. Sortie vers la cuisine
+
+C'est ici que je vous propose une amélioration importante.
+
+Il ne faudrait pas seulement enregistrer :
+
+« 5 kg de poulet sortis »
+
+mais :
+
+Sortie stock n° SORT-20260913-001
+Produit : Poulet
+Lot : NDJ-POL-20260910-002
+Quantité : 5 kg
+Destination : Cuisine
+Motif : Production
+Magasinier : X
+Date/heure : 13/09/2026 – 18h30
+Validé par : Administrateur/Gestionnaire
+
+Cela permet de connaître qui a sorti quoi, de quel lot, quelle quantité, quand et pour quelle destination.
+
+6. Je recommande le principe FEFO
+
+Pour les produits périssables, votre application devrait appliquer :
+
+FEFO = First Expired, First Out
+
+Autrement dit :
+
+Le produit qui expire le plus tôt doit être utilisé en premier.
+
+Exemple :
+
+Lot	Péremption	Stock
+LOT-001	20/09/2026	10
+LOT-002	30/09/2026	20
+LOT-003	15/10/2026	30
+
+Lors d'une sortie de 15 unités, le système propose automatiquement :
+
+10 du LOT-001
+5 du LOT-002
+
+Cela réduit considérablement les pertes.
+
+7. Il faut également gérer les recettes
+
+C'est probablement le point le plus important que vous n'avez pas encore mentionné.
+
+NDJO TACOS ne vend pas uniquement des produits de stock.
+
+Il vend des produits préparés :
+
+Tacos poulet
+Tacos viande
+Burger
+Frites
+Pizza
+Sandwich
+etc.
+
+Il faut donc créer une fiche recette.
+
+Exemple :
+
+Tacos poulet
+
+1 tacos nécessite :
+
+150 g poulet
+1 pain/tortilla
+30 g fromage
+20 g sauce
+50 g légumes
+150 g frites
+1 emballage
+
+Lorsque le caissier vend :
+
+10 Tacos poulet
+
+le système peut calculer automatiquement la consommation théorique :
+
+1,5 kg de poulet
+10 tortillas
+300 g fromage
+200 g sauce
+etc.
+
+Cela permet de comparer :
+
+Stock théorique vs stock réel.
+
+C'est extrêmement utile pour détecter les pertes, erreurs ou détournements.
+
+8. Gestion des boissons
+
+Les boissons doivent également être bien pensées.
+
+Exemple :
+
+Sprite
+
+bouteille 33 cl
+pack de 6
+carton de 24
+
+L'application doit comprendre que :
+
+1 carton = 24 unités
+1 pack = 6 unités
+1 unité = 1 bouteille
+
+Ainsi, si le magasinier reçoit :
+
+5 cartons × 24 = 120 bouteilles
+
+et que la cuisine/caisse consomme :
+
+7 bouteilles
+
+le stock restant devient :
+
+113 bouteilles
+
+9. Gestion des commandes
+
+Une commande devrait suivre un statut :
+
+Nouvelle commande → Confirmée → En préparation → Prête → En livraison → Livrée
+
+ou, pour une commande sur place :
+
+Nouvelle → Préparation → Prête → Servie → Payée
+
+Cela permet au client, au caissier, à la cuisine et au livreur de voir le même état de la commande, chacun selon ses droits.
+
+10. Paiements
+
+Je prévoirais plusieurs modes :
+
+💵 Espèces
+📱 Mobile Money
+💳 Carte bancaire
+🏦 Virement
+éventuellement paiement à la livraison
+
+Et surtout :
+
+montant payé ≠ montant de la commande
+
+pour permettre :
+
+Total : 25 000 FC
+Payé : 30 000 FC
+Monnaie : 5 000 FC
+
+11. Fonctionnement hors connexion
+
+C'est une excellente exigence de votre part.
+
+Mais il faut la concevoir dès le départ.
+
+Par exemple, Internet tombe à 14h00.
+
+Le caissier continue à vendre :
+
+Commande NDJ-000458
+
+L'application enregistre localement :
+
+commande
+produits
+prix
+paiement
+utilisateur
+heure
+mouvements de stock
+
+Lorsque Internet revient :
+
+Synchronisation automatique
+
+📱 Appareil → ☁️ Serveur
+
+Il faut prévoir un mécanisme empêchant les doublons lors de la synchronisation.
+
+12. Tableau de bord de l'administrateur
+
+L'administrateur devrait pouvoir voir :
+
+Aujourd'hui
+
+Ventes
+
+850 000 FC
+
+Commandes
+
+67
+
+Bénéfice estimé
+
+240 000 FC
+
+Stock
+
+3 450 000 FC
+
+Produits bientôt périmés
+
+7
+
+Produits en rupture
+
+4
+
+Commandes en livraison
+
+5
+
+Commandes en cuisine
+
+8
+
+13. Gestion des pertes
+
+Je recommande fortement d'ajouter :
+
+Sortie normale
+
+Produit utilisé pour la production.
+
+Produit périmé
+
+Produit arrivé à expiration.
+
+Produit endommagé
+
+Produit cassé/détérioré.
+
+Perte/inventaire
+
+Différence constatée pendant l'inventaire.
+
+Retour fournisseur
+
+Produit retourné.
+
+Chaque mouvement doit conserver :
+
+Produit + lot/série + quantité + utilisateur + date/heure + motif + validation
+
+Cela donne une traçabilité complète.
+
+14. Inventaire
+
+Le magasinier pourra faire :
+
+Inventaire physique
+
+Exemple :
+
+Produit	Théorique	Réel	Écart
+Coca 33 cl	120	117	-3
+Poulet	25 kg	24,2 kg	-0,8 kg
+Fromage	10 kg	10 kg	0
+
+L'administrateur peut ensuite valider les écarts.
+
+15. Livraison
+
+Pour la livraison, je prévoirais :
+
+nom du client
+téléphone
+adresse
+localisation GPS éventuellement
+commande
+montant
+frais de livraison
+livreur
+statut
+heure de prise en charge
+heure de livraison
+confirmation de réception
+
+Le client pourrait commander depuis le web ou l'application Android.
+
+16. Une chose que je changerais dans votre conception
+
+Ne faites pas uniquement :
+
+Application Web + APK
+
+Je partirais plutôt sur une architecture :
+
+Application Web/PWA + application Android + API centrale + base de données + base locale hors connexion.
+
+Schématiquement :
+
+                 ┌────────────────────┐
+                 │      SERVEUR       │
+                 │  API + Base de DB  │
+                 └─────────┬──────────┘
+                           │
+                    Synchronisation
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+   ┌────▼────┐        ┌────▼────┐        ┌────▼────┐
+   │  WEB    │        │ ANDROID │        │ TABLETTE│
+   │ ADMIN   │        │ CAISSE  │        │ CUISINE │
+   └─────────┘        └─────────┘        └─────────┘
+                           │
+                    MODE HORS LIGNE
+                           │
+                    Base locale
+17. Structure des données
+
+Je prévoirais notamment :
+
+UTILISATEURS
+ROLES
+PERMISSIONS
+
+PRODUITS
+CATEGORIES
+UNITES
+FORMATS
+LOTS
+
+ENTREES_STOCK
+SORTIES_STOCK
+MOUVEMENTS_STOCK
+INVENTAIRES
+
+RECETTES
+INGREDIENTS
+RECETTE_INGREDIENTS
+
+CLIENTS
+COMMANDES
+LIGNES_COMMANDES
+PAIEMENTS
+
+CUISINE
+LIVRAISONS
+LIVREURS
+
+FOURNISSEURS
+ACHATS
+
+DEPENSES
+PERTES
+RETOURS
+
+SYNCHRONISATIONS
+JOURNAL_ACTIVITES
+
+Le JOURNAL_ACTIVITES est particulièrement important : il permet à l'administrateur de savoir qui a créé, modifié, supprimé ou validé une opération.
+
+En résumé
+
+Votre idée initiale est bonne, mais je transformerais le projet NDJO TACOS en ERP léger pour restaurant, avec quatre grands axes :
+
+1. Vente
+→ caisse, commandes, paiements.
+
+2. Stock
+→ lots, séries, dates de péremption, prix d'achat/vente, unités, inventaire, FEFO.
+
+3. Production
+→ recettes, consommation automatique des matières premières, cuisine.
+
+4. Livraison
+→ commande client, préparation, livreur, suivi et confirmation.
+
+Et surtout : mode hors connexion + synchronisation, traçabilité par lot/série, et gestion des permissions dès la première version.
+
+Si vous voulez construire réellement cette application, je peux aussi vous préparer le cahier des charges technique complet de NDJO TACOS, avec tous les écrans, rôles, tables de base de données, relations entre tables, workflow de vente/stock/cuisine/livraison et architecture Web + APK + hors-ligne, de manière directement exploitable par un développeur.
+
+Absolument. Il faut intégrer la notion d'établissement/agence dès la conception, même si NDJO TACOS ne possède qu'un seul restaurant aujourd'hui. Cela évitera de devoir reconstruire toute l'application lorsque vous ouvrirez une deuxième ou troisième implantation.
+
+Je vous conseille même de distinguer Établissement → Département → Utilisateur.
+
+Structure proposée
+NDJO TACOS
+│
+├── Établissement 01 : Centre-ville
+│   ├── Administration
+│   ├── Caisse
+│   ├── Dépôt / Stock
+│   ├── Cuisine
+│   └── Livraison
+│
+├── Établissement 02 : Extension / Quartier X
+│   ├── Caisse
+│   ├── Dépôt / Stock
+│   ├── Cuisine
+│   └── Livraison
+│
+└── Établissement 03 : Extension / Quartier Y
+    ├── Caisse
+    ├── Dépôt / Stock
+    ├── Cuisine
+    └── Livraison
+1. Gestion des établissements
+
+L'administrateur pourra créer :
+
+Nom de l'établissement
+Code établissement
+Adresse
+Téléphone
+Responsable
+Date d'ouverture
+Statut : actif/inactif
+Horaires
+Zone de livraison
+Frais de livraison
+éventuellement coordonnées GPS
+
+Par exemple :
+
+Code	Établissement	Responsable	Statut
+NDJ-01	NDJO TACOS Centre	Responsable A	Actif
+NDJ-02	NDJO TACOS Kenya	Responsable B	Actif
+NDJ-03	NDJO TACOS Extension	Responsable C	Actif
+2. Les stocks doivent être séparés par établissement
+
+C'est très important.
+
+Le Coca-Cola du dépôt de NDJ-01 ne doit pas être mélangé avec celui de NDJ-02.
+
+Ainsi :
+
+Coca-Cola 33 cl
+
+NDJ-01
+Stock : 85
+
+NDJ-02
+Stock : 42
+
+NDJ-03
+Stock : 67
+
+L'administrateur général peut voir :
+
+Stock total NDJO TACOS : 194
+
+mais chaque responsable ne voit normalement que son établissement.
+
+3. Transfert entre établissements
+
+Je vous recommande fortement cette fonctionnalité.
+
+Exemple :
+
+NDJ-01 → NDJ-02
+
+Produit : Coca-Cola 33 cl
+Lot : NDJ-COC-001
+Quantité : 24
+Motif : Réapprovisionnement
+
+Le système crée automatiquement :
+
+Sortie de NDJ-01 : -24
+
+et
+
+Entrée en transit → NDJ-02
+
+puis, lorsque NDJ-02 réceptionne :
+
+Stock NDJ-02 : +24
+
+Cela permet de suivre précisément les mouvements entre restaurants.
+
+4. Les utilisateurs doivent être rattachés à un établissement
+
+Par exemple :
+
+Jean
+
+Rôle : Caissier
+Établissement : NDJ-01
+
+Marie
+
+Rôle : Magasinier
+Établissement : NDJ-02
+
+Administrateur principal
+
+Rôle : Super Admin
+Accès : Tous les établissements
+
+On peut donc avoir deux types de droits :
+
+Droit fonctionnel
+
+Que peut-il faire ?
+
+Périmètre
+
+Dans quel établissement peut-il le faire ?
+
+C'est beaucoup plus sécurisé.
+
+5. Département
+
+Je vous conseille de ne pas coder les départements en dur.
+
+L'administrateur devrait pouvoir créer lui-même :
+
+Paramètres → Établissements → Départements → Ajouter
+
+Exemple :
+
+Établissement : NDJ-01
+
+Départements :
+├── Caisse
+├── Cuisine
+├── Dépôt
+├── Livraison
+├── Administration
+└── Comptabilité
+
+Et si demain vous ajoutez :
+
+Service événementiel
+
+l'administrateur peut simplement créer ce département sans modifier le logiciel.
+
+6. Attention au mot « extension »
+
+Dans la base de données, je recommande d'utiliser le terme Établissement plutôt que « Extension ».
+
+Parce que demain NDJO TACOS pourrait avoir :
+
+restaurant principal
+agence
+succursale
+kiosque
+point de vente
+food truck
+dépôt central
+
+Tout cela peut être géré comme un établissement avec un type.
+
+Par exemple :
+
+Type :
+- Restaurant
+- Point de vente
+- Kiosque
+- Dépôt
+- Autre
+7. Architecture finale que je recommande
+
+Votre projet commence donc à prendre une forme beaucoup plus professionnelle :
+
+                    NDJO TACOS
+                         │
+                 ORGANISATION
+                         │
+          ┌──────────────┴──────────────┐
+          │                             │
+    ÉTABLISSEMENTS                 UTILISATEURS
+          │
+   ┌──────┼───────┐
+   │      │       │
+ NDJ-01 NDJ-02  NDJ-03
+   │      │       │
+   ├──────┤       ├── Départements
+   │      │       │
+ Caisse Cuisine  Stock
+   │      │       │
+   └──────┴───────┘
+          │
+       STOCK
+          │
+   Produits / Lots
+          │
+       Recettes
+          │
+       Ventes
+          │
+      Commandes
+          │
+      Livraison
+          │
+       Rapports
+Et surtout, le tableau de bord de l'administrateur général
+
+Il pourra avoir une vue consolidée :
+
+NDJO TACOS — GROUPE
+
+🏪 3 établissements
+💰 Ventes du jour : 2 450 000 FC
+🛒 186 commandes
+📦 Valeur des stocks : 8 750 000 FC
+⚠️ 12 produits proches de péremption
+🔴 5 produits en rupture
+🛵 14 livraisons en cours
+
+Puis cliquer sur :
+
+NDJ-01 → Voir les ventes
+
+ou
+
+NDJ-02 → Voir le stock
+
+ou
+
+Tous les établissements → Rapport consolidé
+
+C'est cette architecture multi-établissements que je mettrais dès la V1, même si vous commencez avec un seul restaurant. Cela rendra NDJO TACOS extensible sans refaire le système.
+
+le livreur on peut le suivre en ligne (restaurant vias destinateur par l'application si il est en ligne )
+
+Oui, tout à fait. Et je vous recommande d’intégrer cette fonctionnalité dès la conception : géolocalisation en temps réel du livreur, avec affichage sur une carte pour le restaurant et, si vous le souhaitez, pour le client.
+
+🚚 Suivi du livreur NDJO TACOS
+
+Le fonctionnement pourrait être :
+
+CLIENT
+  │
+  │ Commande
+  ▼
+RESTAURANT
+  │
+  │ Attribution de la commande
+  ▼
+LIVREUR
+  │
+  │ GPS activé
+  ▼
+POSITION EN TEMPS RÉEL
+  │
+  ├── Restaurant
+  └── Client
+Dans l'application du livreur
+
+Lorsque le livreur se connecte :
+
+🟢 En ligne
+
+L'application peut demander l'autorisation d'utiliser sa localisation.
+
+Elle transmet périodiquement :
+
+latitude
+longitude
+heure
+vitesse approximative
+direction
+statut du livreur
+
+Par exemple :
+
+🚚 Livreur : Patrick
+🟢 En ligne
+📍 En déplacement
+Commande : NDJ-000458
+Destination : Quartier X
+
+Lorsqu'il désactive sa disponibilité :
+
+⚫ Hors ligne
+
+📍 Côté restaurant
+
+Le responsable peut ouvrir :
+
+Livraisons → Livreurs → Carte
+
+et voir :
+
+                    CARTE
+
+             🚚 Patrick
+                 ↓
+          ───────────────
+               ↓
+          📍 Client
+
+Restaurant NDJ-01
+
+Il peut donc savoir :
+
+où se trouve le livreur ;
+s'il est en déplacement ;
+quelle commande il transporte ;
+depuis combien de temps ;
+éventuellement son ETA estimé.
+👤 Côté client
+
+On peut également afficher :
+
+Votre commande est en route 🚚
+
+Livreur : Patrick
+
+Statut : En route
+
+Position du livreur : 📍
+
+Arrivée estimée : 12 min
+
+Cela donne une expérience comparable aux applications modernes de livraison.
+
+🔐 Mais il faut prévoir une règle importante
+
+Le livreur ne doit pas être géolocalisé en permanence.
+
+Je recommande :
+
+Hors service
+
+❌ aucune localisation
+
+En ligne mais sans livraison
+
+🟢 disponible, localisation éventuellement visible uniquement par le restaurant
+
+Commande attribuée
+
+📍 localisation active pour cette livraison
+
+Commande livrée
+
+⛔ arrêt automatique du suivi GPS de cette commande
+
+C'est meilleur pour la confidentialité et cela économise aussi la batterie et les données mobiles.
+
+Et je rajouterais une fonctionnalité très intéressante
+Zones de livraison
+
+L'administrateur pourrait définir les zones :
+
+Zone A
+
+Centre-ville
+Frais : 2 000 FC
+
+Zone B
+
+Kenya
+Frais : 3 000 FC
+
+Zone C
+
+Lubumbashi Est
+Frais : 4 000 FC
+
+Lorsqu'un client indique son adresse, l'application peut déterminer la zone et calculer automatiquement les frais de livraison.
+
+Et surtout : affectation intelligente
+
+Le système pourrait proposer :
+
+Commande NDJ-000458
+
+Destination : Quartier X
+
+Livreurs disponibles :
+
+🟢 Patrick — 1,2 km
+🟢 Jean — 3,5 km
+🟢 Michel — 5,1 km
+
+Le gestionnaire choisit Patrick ou le système peut proposer automatiquement le livreur disponible le plus proche.
+
+Donc votre application NDJO TACOS devient réellement un système complet :
+
+Commande → Cuisine → Préparation → Affectation du livreur → GPS → Livraison → Confirmation → Paiement → Historique.
+
+Et cette fonction GPS doit être prévue dans l'architecture technique dès le départ, particulièrement parce que vous voulez une application Android + Web + fonctionnement hors connexion.
+
+et aussi si le client paie par cash ou par n'importe quel mode de paiement pour la livraison , on lui envoi automatiquement le lien de livreur si cela est à livre  et aussi sa facture en pdf par whatsapp
+
+Oui. Cette fonctionnalité est très pertinente et peut être intégrée dans le cahier des charges de NDJO TACOS. Elle permettrait d'automatiser toute la chaîne commande → paiement → livraison → suivi → facture → WhatsApp.
+
+📲 Workflow proposé
+CLIENT PASSE COMMANDE
+        ↓
+Choix : Sur place / À emporter / Livraison
+        ↓
+Choix du mode de paiement
+        ↓
+┌─────────────────────────────┐
+│ CASH                        │
+│ MOBILE MONEY                │
+│ CARTE                       │
+│ AUTRE                       │
+└─────────────────────────────┘
+        ↓
+PAIEMENT CONFIRMÉ
+        ↓
+Génération automatique
+du N° de commande + facture
+        ↓
+        ├──────────────→ 📄 FACTURE PDF
+        │                    ↓
+        │               WhatsApp client
+        │
+        └──────────────→ 🚚 LIVRAISON
+                              ↓
+                    Attribution du livreur
+                              ↓
+                    🔗 Lien de suivi GPS
+                              ↓
+                         WhatsApp client
+🚚 Le lien du livreur
+
+Dès que la commande est attribuée à un livreur, le client reçoit automatiquement un message WhatsApp du type :
+
+Notification livraison
+
+🍔 NDJO TACOS — Votre commande est en route !
+
+Bonjour [Nom du client],
+
+Votre commande #NDJ-000458 a été confiée à notre livreur.
+
+🚚 Livreur : Patrick
+📦 Commande : 3 articles
+💰 Total : 28 000 FC
+💳 Paiement : Cash à la livraison
+📍 Statut : En route
+
+👉 Suivre votre livraison en temps réel :
+[LIEN DE SUIVI]
+
+Merci d'avoir choisi NDJO TACOS ! 🍟🥤
+
+Le lien pourrait ouvrir une page Web de suivi, sans obliger le client à installer l'application.
+
+Par exemple :
+
+ndjotacos.com/track/NDJ-000458
+
+Le client voit alors la position du livreur sur une carte, si le livreur est en ligne et partage sa localisation.
+
+📄 Facture PDF automatique
+
+Après confirmation du paiement ou de la commande, le système génère automatiquement une facture PDF contenant notamment :
+
+Logo NDJO TACOS
+établissement concerné
+numéro de facture
+numéro de commande
+date et heure
+nom du client
+téléphone
+adresse de livraison
+détail des produits
+quantité
+prix unitaire
+sous-total
+frais de livraison
+réduction éventuelle
+montant total
+mode de paiement
+statut du paiement
+nom du caissier
+éventuellement QR code de vérification
+
+Puis le système peut envoyer le document au client via WhatsApp.
+
+💰 Et pour le paiement CASH
+
+Il faut faire une distinction importante.
+
+Si le client choisit :
+
+Cash à la livraison
+
+l'application ne doit pas considérer automatiquement la facture comme payée.
+
+Elle indique :
+
+🟠 Paiement en attente
+
+Lorsque le livreur reçoit les espèces, il confirme :
+
+Paiement reçu : 28 000 FC
+
+Le système passe alors à :
+
+🟢 Payé
+
+et conserve :
+
+qui a encaissé ;
+montant ;
+date/heure ;
+commande concernée ;
+établissement ;
+mode de paiement.
+
+Cela évite beaucoup de problèmes de caisse.
+
+📱 Pour les paiements électroniques
+
+Pour Mobile Money, carte ou autre moyen intégré, le système peut fonctionner ainsi :
+
+Commande : 28 000 FC
+
+→ Paiement initié
+→ Paiement confirmé par le prestataire
+→ Statut : PAYÉ
+→ Facture générée
+→ WhatsApp envoyé
+→ Livraison déclenchée.
+
+📲 WhatsApp doit devenir un véritable canal de communication
+
+Je prévoirais plusieurs notifications automatiques :
+
+1. Commande reçue
+
+✅ Votre commande #NDJ-000458 a été reçue.
+
+2. Commande confirmée
+
+✅ Votre commande est confirmée.
+
+3. Cuisine
+
+👨‍🍳 Votre commande est en préparation.
+
+4. Commande prête
+
+🍔 Votre commande est prête.
+
+5. Livreur affecté
+
+🚚 Votre commande a été confiée à Patrick.
+
+6. Suivi
+
+📍 Suivez votre livreur en temps réel.
+
+7. Livraison
+
+✅ Votre commande a été livrée.
+
+8. Facture
+
+📄 Voici votre facture NDJO TACOS.
+
+⭐ Je rajouterais même un QR code sur la facture
+
+Le client reçoit une facture avec :
+
+QR CODE
+
+En le scannant, il peut vérifier :
+
+Facture NDJ-2026-000458
+Commande authentique
+Total : 28 000 FC
+Statut : Payée
+Date : 13/09/2026
+
+Cela peut aussi être très utile pour lutter contre les fausses factures.
+
+Architecture finale de NDJO TACOS
+
+À ce stade, votre projet comporte donc :
+
+🏢 Multi-établissements
+👥 Utilisateurs + rôles + permissions
+📦 Stock + lots + séries + péremption
+🍳 Recettes + consommation cuisine
+🛒 Caisse + commandes
+💳 Paiements multiples
+🚚 Livraison + géolocalisation
+📍 Suivi GPS du livreur
+📱 Notifications WhatsApp
+📄 Factures PDF automatiques
+📊 Rapports et statistiques
+🔄 Fonctionnement hors connexion + synchronisation
+
+CAHIER DES CHARGES — APPLICATION NDJO TACOS
+
+Version : 1.0
+Projet : Système intégré de vente, gestion de stock, cuisine et livraison
+Plateformes : Web + Android (APK)
+Mode : En ligne + Hors connexion avec synchronisation
+
+1. Présentation du projet
+
+NDJO TACOS souhaite mettre en place une application hybride permettant de gérer l'ensemble de ses activités :
+
+gestion des établissements ;
+gestion des départements/services ;
+gestion des utilisateurs et permissions ;
+gestion des produits et du catalogue ;
+gestion des achats et fournisseurs ;
+gestion des stocks et des lots ;
+gestion des recettes et de la production ;
+caisse et ventes ;
+commandes clients ;
+paiements ;
+cuisine ;
+livraison ;
+géolocalisation des livreurs ;
+notifications WhatsApp ;
+génération de factures PDF ;
+rapports et statistiques ;
+fonctionnement hors connexion.
+
+L'application devra être évolutive afin de permettre à NDJO TACOS d'ajouter ultérieurement plusieurs restaurants, extensions, points de vente ou dépôts.
+
+2. Objectifs
+
+L'application doit permettre à NDJO TACOS de :
+
+Centraliser ses opérations.
+Contrôler les ventes en temps réel.
+Maîtriser les stocks.
+Assurer la traçabilité des produits par lot/série.
+Réduire les pertes et produits périmés.
+Contrôler les sorties vers la cuisine.
+Calculer la consommation théorique des recettes.
+Gérer plusieurs établissements.
+Gérer plusieurs utilisateurs avec différents niveaux d'accès.
+Gérer les commandes à emporter, sur place et en livraison.
+Suivre les livreurs.
+Accepter plusieurs modes de paiement.
+Envoyer automatiquement les informations au client via WhatsApp.
+Générer automatiquement les factures.
+Continuer à fonctionner lorsque Internet est indisponible.
+3. Architecture organisationnelle
+
+L'application doit être multi-établissements.
+
+NDJO TACOS
+│
+├── Établissement 01
+│   ├── Administration
+│   ├── Caisse
+│   ├── Dépôt
+│   ├── Cuisine
+│   └── Livraison
+│
+├── Établissement 02
+│   ├── Administration
+│   ├── Caisse
+│   ├── Dépôt
+│   ├── Cuisine
+│   └── Livraison
+│
+└── Établissement 03
+    ├── Caisse
+    ├── Dépôt
+    ├── Cuisine
+    └── Livraison
+
+L'administrateur principal peut avoir une vue consolidée de tous les établissements.
+
+4. Gestion des établissements
+
+L'administrateur peut créer, modifier, désactiver un établissement.
+
+Informations
+Nom
+Code
+Type d'établissement
+Adresse
+Téléphone
+Responsable
+Email
+Coordonnées GPS
+Horaires d'ouverture
+Zone de livraison
+Statut
+Types possibles
+Restaurant
+Point de vente
+Kiosque
+Dépôt
+Extension
+Autre
+5. Gestion des départements
+
+Chaque établissement peut posséder plusieurs départements.
+
+Exemples :
+
+Administration
+Caisse
+Cuisine
+Dépôt
+Livraison
+Comptabilité
+Service client
+
+L'administrateur doit pouvoir créer librement de nouveaux départements.
+
+6. Gestion des utilisateurs
+Rôles standards
+Super administrateur
+
+Accès complet à tous les établissements.
+
+Administrateur d'établissement
+
+Gestion de son établissement.
+
+Gestionnaire
+
+Gestion opérationnelle et consultation des rapports.
+
+Caissier/Vendeur
+
+Ventes, commandes et paiements.
+
+Magasinier
+
+Entrées, sorties, transferts et inventaires.
+
+Cuisinier
+
+Commandes à préparer et production.
+
+Livreur
+
+Livraisons et géolocalisation.
+
+Client
+
+Catalogue, commandes, paiements et suivi.
+
+7. Permissions
+
+Les permissions doivent être indépendantes des rôles.
+
+Exemples :
+
+voir les ventes ;
+créer une vente ;
+annuler une vente ;
+modifier un prix ;
+créer un produit ;
+modifier un produit ;
+effectuer une entrée stock ;
+effectuer une sortie stock ;
+effectuer un inventaire ;
+valider un transfert ;
+consulter les bénéfices ;
+gérer les utilisateurs ;
+gérer les établissements.
+
+Cela permet de créer ultérieurement des rôles personnalisés.
+
+8. Catalogue des produits
+
+Chaque produit doit avoir :
+
+nom ;
+code produit ;
+catégorie ;
+sous-catégorie ;
+description ;
+photo ;
+prix d'achat ;
+prix de vente ;
+unité ;
+poids/volume ;
+format ;
+seuil d'alerte ;
+fournisseur ;
+statut actif/inactif.
+Unités
+gramme
+kilogramme
+millilitre
+litre
+pièce
+bouteille
+sachet
+paquet
+carton
+Formats
+Unitaire
+3 pièces
+6 pièces
+Sixaine
+Douzaine
+24 pièces
+autre format configurable.
+9. Gestion des lots et séries
+
+Un produit peut avoir plusieurs lots.
+
+Exemple :
+
+Coca-Cola 330 ml
+
+Produit : Coca-Cola 330 ml
+
+Lot 001
+Entrée : 10/09/2026
+Péremption : 10/03/2027
+Prix achat : 1 000 FC
+Quantité : 48
+
+Lot 002
+Entrée : 13/09/2026
+Péremption : 13/04/2027
+Prix achat : 1 100 FC
+Quantité : 72
+
+Chaque lot possède une identification unique.
+
+Exemple :
+
+NDJ-COC-20260913-002
+
+Un QR code ou code-barres peut être associé au lot.
+
+10. Gestion des stocks
+
+Le stock doit être séparé par établissement.
+
+Le système doit gérer :
+
+entrées ;
+sorties ;
+transferts ;
+retours ;
+pertes ;
+produits périmés ;
+produits endommagés ;
+inventaires ;
+ajustements validés.
+
+Chaque mouvement doit conserver :
+
+Produit + lot + quantité + utilisateur + établissement + date/heure + motif.
+
+11. Principe FEFO
+
+Pour les produits périssables, le système doit proposer automatiquement le lot ayant la date de péremption la plus proche.
+
+FEFO : First Expired, First Out.
+
+Le magasinier peut toutefois avoir besoin d'une autorisation spéciale pour utiliser un autre lot.
+
+12. Sortie du stock vers la cuisine
+
+Exemple :
+
+Sortie : SORT-000245
+Produit : Poulet
+Lot : NDJ-POL-001
+Quantité : 5 kg
+Destination : Cuisine
+Motif : Production
+Magasinier : Jean
+Date : 13/09/2026
+Heure : 18h30
+
+La sortie doit être enregistrée dans l'historique.
+
+13. Recettes et fiches techniques
+
+Chaque plat doit pouvoir avoir une recette.
+
+Exemple : Tacos Poulet
+Ingrédient	Quantité
+Poulet	150 g
+Tortilla	1
+Fromage	30 g
+Sauce	20 g
+Légumes	50 g
+Frites	150 g
+Emballage	1
+
+Si 10 tacos sont vendus, le système calcule la consommation théorique.
+
+Cela permet de comparer :
+
+Stock théorique ↔ Stock réel
+
+14. Caisse et ventes
+
+Le caissier peut :
+
+rechercher un produit ;
+ajouter au panier ;
+modifier quantité ;
+appliquer une remise selon ses permissions ;
+choisir le type de commande ;
+enregistrer le paiement ;
+imprimer/envoyer le reçu.
+Types de commande
+Sur place
+À emporter
+Livraison
+15. Gestion des commandes
+
+Chaque commande reçoit un identifiant unique.
+
+Exemple :
+
+NDJ-2026-000458
+
+Statuts :
+
+Nouvelle
+ ↓
+Confirmée
+ ↓
+En préparation
+ ↓
+Prête
+ ↓
+Livreur affecté
+ ↓
+En livraison
+ ↓
+Livrée
+ ↓
+Clôturée
+16. Gestion des paiements
+
+Modes configurables :
+
+Cash
+Mobile Money
+Carte bancaire
+Virement
+Paiement à la livraison
+Autre
+
+Le système doit conserver :
+
+montant ;
+mode ;
+statut ;
+référence transaction ;
+utilisateur ;
+date/heure.
+Cash à la livraison
+
+La commande reste :
+
+🟠 Paiement en attente
+
+Le livreur confirme ensuite :
+
+🟢 Paiement reçu
+
+17. Gestion de la cuisine
+
+La cuisine possède son propre écran.
+
+Elle voit :
+
+Commande #NDJ-000458
+2 × Tacos poulet
+1 × Frites
+2 × Coca-Cola
+
+Statuts :
+
+À préparer → En préparation → Prête
+
+La cuisine ne doit pas nécessairement avoir accès aux données financières.
+
+18. Gestion des livreurs
+
+Chaque livreur possède :
+
+nom ;
+téléphone ;
+photo ;
+établissement ;
+statut ;
+disponibilité ;
+historique des livraisons.
+Statuts
+
+🟢 Disponible
+🟡 En livraison
+⚫ Hors ligne
+
+19. Géolocalisation du livreur
+
+Lorsqu'une livraison est active et que le livreur a autorisé la localisation :
+
+L'application transmet sa position.
+
+Le restaurant peut voir :
+
+🚚 Patrick
+Commande : NDJ-000458
+Statut : En route
+Position : carte
+Dernière mise à jour : 18:42
+
+Le client peut également recevoir un lien Web de suivi.
+
+20. Lien de suivi client
+
+Le client reçoit automatiquement :
+
+🚚 Votre commande est en route.
+Suivre le livreur : [lien]
+
+Le lien ouvre une page Web avec :
+
+carte ;
+position du livreur ;
+statut ;
+commande ;
+estimation d'arrivée lorsque disponible.
+
+Le client n'a pas besoin d'installer l'application.
+
+21. WhatsApp
+
+Le système doit pouvoir envoyer automatiquement au client, sous réserve de l'intégration WhatsApp appropriée :
+
+Confirmation
+
+Votre commande est confirmée.
+
+Préparation
+
+Votre commande est en préparation.
+
+Livraison
+
+Votre commande est en route.
+
+Suivi
+
+Voici le lien pour suivre votre livreur.
+
+Livraison terminée
+
+Votre commande a été livrée.
+
+Facture
+
+Votre facture PDF est disponible.
+
+22. Facture PDF
+
+La facture doit contenir :
+
+logo NDJO TACOS ;
+établissement ;
+adresse ;
+numéro facture ;
+numéro commande ;
+client ;
+téléphone ;
+date ;
+produits ;
+quantités ;
+prix ;
+réductions ;
+frais de livraison ;
+total ;
+mode de paiement ;
+statut du paiement ;
+éventuellement QR code.
+
+Le système génère automatiquement le PDF.
+
+23. Envoi automatique de la facture
+
+Après validation de la commande/paiement :
+
+Commande
+   ↓
+Facture générée
+   ↓
+PDF
+   ↓
+WhatsApp
+   ↓
+Client
+
+Pour un paiement cash à la livraison, le système peut envoyer la facture avec le statut :
+
+À payer
+
+puis générer/mettre à disposition la facture finale après confirmation du paiement.
+
+24. Gestion des livraisons
+
+Une livraison contient :
+
+commande ;
+client ;
+téléphone ;
+adresse ;
+position ;
+établissement ;
+livreur ;
+frais de livraison ;
+statut ;
+heure de départ ;
+heure de livraison ;
+paiement ;
+preuve de livraison.
+
+On peut également ajouter :
+
+Preuve de livraison :
+
+code OTP envoyé au client ;
+signature ;
+photo, si nécessaire.
+
+Je recommande particulièrement l'OTP : le client donne un code au livreur pour confirmer la réception.
+
+25. Zones de livraison
+
+L'administrateur peut définir :
+
+Zone 1 → 2 000 FC
+Zone 2 → 3 000 FC
+Zone 3 → 5 000 FC
+
+Les frais sont automatiquement ajoutés selon la zone.
+
+26. Transfert entre établissements
+
+Exemple :
+
+NDJ-01 → NDJ-02
+
+24 Coca-Cola
+Lot : NDJ-COC-001
+
+Le système crée :
+
+Sortie NDJ-01
+
+puis :
+
+Transfert en cours
+
+puis :
+
+Réception NDJ-02
+
+L'administrateur peut consulter l'historique complet.
+
+27. Inventaire
+
+Le magasinier peut effectuer un inventaire.
+
+Produit       Théorique    Réel      Écart
+Coca-Cola        120       117        -3
+Poulet            25 kg    24,2 kg    -0,8 kg
+Fromage           10 kg    10 kg       0
+
+Les écarts importants peuvent nécessiter une validation du gestionnaire.
+
+28. Gestion des pertes
+
+Motifs :
+
+péremption ;
+produit endommagé ;
+erreur ;
+casse ;
+perte ;
+consommation interne ;
+autre.
+
+Chaque perte est traçable.
+
+29. Rapports
+Ventes
+ventes journalières ;
+hebdomadaires ;
+mensuelles ;
+par produit ;
+par catégorie ;
+par caissier ;
+par établissement.
+Stock
+stock actuel ;
+mouvements ;
+produits en rupture ;
+produits proches de péremption ;
+pertes ;
+inventaires.
+Livraison
+nombre de livraisons ;
+livraisons par livreur ;
+temps moyen ;
+commandes annulées ;
+paiements à la livraison.
+Finance
+chiffre d'affaires ;
+achats ;
+dépenses ;
+coût matière ;
+marge ;
+bénéfice estimé.
+30. Tableau de bord général
+
+Le Super Administrateur aura :
+
+NDJO TACOS — TABLEAU DE BORD
+
+Établissements : 3
+
+Ventes aujourd'hui       2 450 000 FC
+Commandes                    186
+Livraisons                     47
+En préparation                  8
+
+Stock                      8 750 000 FC
+
+Produits en rupture             5
+Produits proches péremption    12
+
+Paiements cash             850 000 FC
+Mobile Money             1 200 000 FC
+Carte                       400 000 FC
+
+Avec possibilité de filtrer :
+
+Tous les établissements
+NDJ-01
+NDJ-02
+NDJ-03
+
+31. Fonctionnement hors connexion
+
+C'est une exigence majeure.
+
+L'application Android doit pouvoir continuer à fonctionner sans Internet pour les opérations essentielles :
+
+consultation du catalogue ;
+prise de commande ;
+caisse ;
+paiements enregistrés ;
+mouvements de stock ;
+cuisine ;
+certaines opérations de livraison.
+
+Les données sont conservées localement.
+
+Lorsque la connexion revient :
+
+Synchronisation automatique
+
+Téléphone
+    ↓
+Base locale
+    ↓
+Internet disponible
+    ↓
+Synchronisation
+    ↓
+Serveur central
+
+Il faudra prévoir une gestion des conflits et des identifiants uniques afin d'éviter les doublons.
+
+32. Sécurité
+
+Le système devra prévoir :
+
+authentification ;
+mot de passe sécurisé ;
+gestion des sessions ;
+permissions ;
+journal des activités ;
+sauvegardes ;
+chiffrement des communications ;
+protection des données ;
+déconnexion automatique après période d'inactivité ;
+traçabilité des modifications sensibles.
+
+Exemple :
+
+Jean a modifié le prix du Coca-Cola
+13/09/2026 – 18:42
+Ancien prix : 1 500 FC
+Nouveau prix : 1 700 FC
+
+33. Journal d'audit
+
+Aucune opération sensible ne devrait disparaître silencieusement.
+
+Le système conserve :
+
+QUI → A FAIT QUOI → QUAND → OÙ → AVANT/APRÈS
+
+Cela concerne notamment :
+
+suppression ;
+modification de prix ;
+annulation de commande ;
+correction de stock ;
+perte ;
+remboursement ;
+validation de paiement ;
+transfert de stock.
+34. Architecture technique recommandée
+
+Je recommande une architecture moderne :
+
+                ┌───────────────────────┐
+                │       SERVEUR         │
+                │                       │
+                │ API + Base de données │
+                │ Authentification      │
+                │ Synchronisation       │
+                └───────────┬───────────┘
+                            │
+                 Internet / Synchronisation
+                            │
+          ┌─────────────────┼──────────────────┐
+          │                 │                  │
+      ┌───▼───┐         ┌───▼───┐          ┌──▼────┐
+      │  WEB  │         │ANDROID│          │TABLETTE│
+      │ ADMIN │         │ CAISSE│          │CUISINE │
+      └───────┘         └───────┘          └───────┘
+                            │
+                       Base locale
+                       HORS LIGNE
+35. Base de données principale
+
+Les principales entités seront notamment :
+
+ETABLISSEMENTS
+DEPARTEMENTS
+UTILISATEURS
+ROLES
+PERMISSIONS
+
+PRODUITS
+CATEGORIES
+UNITES
+FORMATS
+LOTS
+
+FOURNISSEURS
+ACHATS
+ENTREES_STOCK
+SORTIES_STOCK
+TRANSFERTS
+MOUVEMENTS_STOCK
+INVENTAIRES
+PERTES
+
+RECETTES
+INGREDIENTS
+RECETTE_INGREDIENTS
+
+CLIENTS
+COMMANDES
+LIGNES_COMMANDES
+PAIEMENTS
+
+CUISINE
+LIVREURS
+LIVRAISONS
+POSITIONS_LIVREURS
+
+FACTURES
+NOTIFICATIONS
+ZONES_LIVRAISON
+
+DEPENSES
+JOURNAL_AUDIT
+SYNCHRONISATIONS
+36. Évolution future
+
+L'application doit être conçue pour pouvoir intégrer ultérieurement :
+
+programme de fidélité ;
+points fidélité ;
+coupons ;
+promotions ;
+codes promo ;
+réservation de table ;
+QR menu ;
+commande par QR code à table ;
+imprimante thermique ;
+scanner code-barres ;
+gestion des fournisseurs ;
+comptabilité avancée ;
+statistiques avancées ;
+plusieurs devises ;
+plusieurs langues ;
+commande via site Internet ;
+application iPhone/iOS ;
+intégration de différents services de paiement.
+37. Priorité de développement
+
+Je recommande de développer NDJO TACOS en 3 phases.
+
+PHASE 1 — Cœur du système
+établissements ;
+utilisateurs/permissions ;
+produits ;
+catégories ;
+lots ;
+stock ;
+caisse ;
+commandes ;
+cuisine ;
+paiements ;
+factures ;
+mode hors connexion.
+PHASE 2 — Livraison
+clients ;
+livreurs ;
+affectation ;
+zones ;
+GPS ;
+suivi en temps réel ;
+notifications ;
+WhatsApp ;
+livraison.
+PHASE 3 — Gestion avancée
+recettes ;
+consommation automatique ;
+inventaires avancés ;
+transferts inter-établissements ;
+statistiques ;
+bénéfices ;
+fidélité ;
+promotions ;
+QR code ;
+analyses avancées.
+🎯 Principe fondamental du projet
+
+Je recommande que le système soit construit autour de cette logique :
+
+UN PRODUIT → UN LOT → UN STOCK → UNE SORTIE → UNE CONSOMMATION → UNE VENTE → UN PAIEMENT → UNE FACTURE → UNE LIVRAISON
+
+et que chaque opération soit liée à :
+
+UN ÉTABLISSEMENT + UN UTILISATEUR + UNE DATE/HEURE.
+
+C'est ce qui donnera à NDJO TACOS une traçabilité complète, même lorsque l'entreprise passera de 1 à 5 ou 10 établissements.
+
+La prochaine étape logique est de transformer ce cahier des charges en spécification technique : écrans par écran, menus de l'application, parcours de chaque utilisateur, schéma relationnel de la base de données et API nécessaires. C'est ce document-là qu'un développeur pourra ensuite utiliser pour commencer réellement le développement.
+
+
+NDJO TACOS — SPÉCIFICATION FONCTIONNELLE & TECHNIQUE
+
+Version 1.0 — Document de conception
+
+1. Architecture globale
+
+L'application sera composée de 4 parties :
+
+                         NDJO TACOS
+                              │
+                    ┌─────────▼─────────┐
+                    │   SERVEUR CENTRAL │
+                    │   API REST/JSON   │
+                    │ Base de données   │
+                    │ Authentification  │
+                    └─────────┬─────────┘
+                              │
+              ┌───────────────┼────────────────┐
+              │               │                │
+        ┌─────▼─────┐   ┌─────▼─────┐    ┌────▼────┐
+        │ APPLICATION│   │ APPLICATION│    │   WEB   │
+        │ ANDROID    │   │ CLIENT     │    │ ADMIN   │
+        │ Interne    │   │ /Commande  │    │         │
+        └─────┬─────┘   └────────────┘    └─────────┘
+              │
+       Base locale SQLite
+              │
+        MODE HORS LIGNE
+Applications
+
+Application Android interne
+
+administrateur ;
+gestionnaire ;
+caissier ;
+magasinier ;
+cuisinier ;
+livreur.
+
+Interface Web
+
+administration ;
+gestion ;
+rapports ;
+supervision multi-établissements.
+
+Interface client Web/Android
+
+catalogue ;
+commande ;
+paiement ;
+suivi livraison ;
+facture.
+2. Menu principal de l'administrateur
+TABLEAU DE BORD
+
+🏢 Établissements
+👥 Utilisateurs
+🔐 Rôles & permissions
+
+🍔 Catalogue
+📦 Stocks
+🧾 Achats
+👨‍🍳 Recettes
+
+🛒 Ventes
+📋 Commandes
+💳 Paiements
+
+👨‍🍳 Cuisine
+🚚 Livraisons
+📍 Livreurs
+
+👤 Clients
+📄 Factures
+
+📊 Rapports
+💰 Finance
+
+⚙️ Paramètres
+🔐 Journal d'audit
+3. Écran « Établissements »
+Liste
+Code	Nom	Type	Responsable	Statut
+NDJ-01	Centre	Restaurant	X	Actif
+NDJ-02	Kenya	Restaurant	Y	Actif
+Boutons
+
++ Ajouter établissement
+
+Formulaire :
+
+Nom *
+Code *
+Type *
+Adresse *
+Téléphone
+Email
+Responsable
+Latitude
+Longitude
+Horaires
+Statut
+4. Écran « Départements »
+
+Chaque établissement possède ses départements.
+
+NDJ-01
+│
+├── Administration
+├── Caisse
+├── Cuisine
+├── Dépôt
+├── Livraison
+└── Comptabilité
+
+Un département peut être activé ou désactivé.
+
+5. Écran « Utilisateurs »
++ Ajouter utilisateur
+
+Nom
+Téléphone
+Email
+Nom utilisateur
+Mot de passe
+Établissement
+Département
+Rôle
+Statut
+Exemple
+
+Patrick
+Établissement : NDJ-01
+Département : Livraison
+Rôle : Livreur
+
+6. Gestion des permissions
+
+Les permissions seront granulaires.
+
+VENTES
+☑ Voir
+☑ Créer
+☐ Modifier
+☐ Annuler
+
+STOCK
+☑ Voir
+☐ Entrée
+☐ Sortie
+☐ Inventaire
+
+UTILISATEURS
+☐ Voir
+☐ Créer
+☐ Modifier
+
+L'administrateur peut créer un rôle personnalisé.
+
+7. Écran catalogue
+Liste des produits
+🔍 Rechercher
+
+Nom          Catégorie       Stock     Prix vente
+Coca-Cola    Boisson         120       1 500 FC
+Poulet        Viande           25 kg   12 000 FC
+Fromage       Aliment          10 kg   15 000 FC
+Ajouter produit
+Nom *
+Code produit *
+Catégorie *
+Sous-catégorie
+Description
+Photo
+
+Unité *
+Poids / Volume
+Format *
+
+Prix achat
+Prix vente
+
+Stock minimum
+Fournisseur
+8. Gestion des lots
+
+À la réception d'un produit :
+
+PRODUIT
+Coca-Cola 330 ml
+
+LOT
+Numéro : NDJ-COC-20260913-001
+
+Date entrée : 13/09/2026
+Date péremption : 13/03/2027
+
+Quantité : 48
+Prix achat : 1 000 FC
+Prix vente : 1 500 FC
+
+Établissement : NDJ-01
+Dépôt : Dépôt principal
+
+Le système génère automatiquement :
+
+QR Code / code-barres du lot.
+
+9. Stock
+
+Le stock doit être calculé à partir des mouvements.
+
+Stock final =
+Stock initial
++ Entrées
++ Réceptions
+- Sorties
+- Pertes
+- Transferts
+± Ajustements
+
+Il ne faut pas permettre à un utilisateur de modifier directement « Stock = 100 ».
+
+Toute modification doit passer par un mouvement de stock.
+
+10. Entrée de stock
++ Nouvelle entrée
+
+Fournisseur
+Établissement
+Dépôt
+
+Produit
+Lot
+Quantité
+Unité
+Prix achat
+Prix vente
+Date entrée
+Date péremption
+
+[ENREGISTRER]
+
+Le système crée automatiquement un numéro :
+
+ENT-2026-000125
+
+11. Sortie de stock
++ Nouvelle sortie
+
+Destination :
+○ Cuisine
+○ Perte
+○ Consommation interne
+○ Autre
+
+Produit
+Lot
+Quantité
+Motif
+
+[VALIDER]
+
+Pour les produits périssables, le système propose automatiquement le lot FEFO.
+
+12. Transfert entre établissements
+Établissement source : NDJ-01
+Établissement destination : NDJ-02
+
+Produit : Coca-Cola
+Lot : NDJ-COC-001
+Quantité : 24
+
+[Créer transfert]
+
+Statuts :
+
+Créé → Expédié → En transit → Reçu
+
+13. Recettes
+
+Exemple :
+
+Tacos Poulet
+Prix de vente : 15 000 FC
+
+INGRÉDIENTS
+
+Poulet       150 g
+Tortilla       1 pc
+Fromage       30 g
+Sauce         20 g
+Légumes       50 g
+Frites       150 g
+Emballage      1 pc
+
+La recette permet de calculer :
+
+coût de revient → marge → consommation de stock.
+
+14. Caisse
+
+Interface extrêmement simple :
+
+🔍 Rechercher produit
+
+TACOS
+[Poulet] [Viande] [Mixte]
+
+BOISSONS
+[Coca] [Fanta] [Sprite]
+
+ACCOMPAGNEMENT
+[Frites] [Salade]
+
+Panier :
+
+2 × Tacos Poulet       30 000
+1 × Frites              5 000
+2 × Coca                 3 000
+------------------------------
+TOTAL                   38 000 FC
+
+Paiement :
+○ Cash
+○ Mobile Money
+○ Carte
+○ Autre
+
+[VALIDER]
+15. Commande
+
+Chaque commande reçoit un identifiant unique :
+
+NDJ-2026-000458
+
+Types :
+
+sur place ;
+à emporter ;
+livraison.
+
+Pour livraison :
+
+Client
+Téléphone
+Adresse
+Localisation
+Zone
+Frais livraison
+Livreur
+16. Écran cuisine
+
+La cuisine ne voit que ce qui est nécessaire.
+
+COMMANDES À PRÉPARER
+
+#458
+2 Tacos Poulet
+1 Frites
+2 Coca
+
+[COMMENCER]
+
+          ↓
+
+[PRÊTE]
+
+Le statut est immédiatement transmis au système.
+
+17. Gestion des livreurs
+LIVREURS
+
+🟢 Patrick       Disponible
+🟡 Jean          En livraison
+⚫ Michel         Hors ligne
+
+Pour une nouvelle livraison :
+
+Attribuer automatiquement / Choisir un livreur
+
+Le système peut proposer le livreur disponible le plus proche.
+
+18. GPS
+
+Pendant une livraison active :
+
+LIVRAISON #458
+
+Livreur : Patrick
+🟢 En ligne
+
+Position :
+📍  - carte -
+
+Dernière position :
+18:45:12
+
+Commande :
+28 000 FC
+
+Destination :
+Client X
+
+Le serveur reçoit périodiquement la position.
+
+Important : le suivi GPS doit être limité aux périodes où il est nécessaire, notamment pendant une livraison active.
+
+19. Suivi client
+
+Le client reçoit :
+
+🚚 Votre commande est en route.
+
+Suivre ma commande
+
+Le lien ouvre une page Web :
+
+NDJO TACOS
+
+Commande #458
+🟢 En livraison
+
+🚚 Patrick
+
+             📍
+          LIVREUR
+
+              ↓
+
+             🏠
+           CLIENT
+
+Arrivée estimée : 12 min
+20. Paiement
+
+Le système doit gérer deux notions :
+
+Statut de commande
+Nouvelle
+Confirmée
+Préparation
+Prête
+En livraison
+Livrée
+Annulée
+Statut de paiement
+En attente
+En cours
+Payé
+Échoué
+Remboursé
+
+C'est important : commande et paiement ne doivent pas être une seule information.
+
+21. Facture
+
+Après validation :
+
+FACTURE
+NDJ-FAC-2026-000458
+
+NDJO TACOS
+Établissement NDJ-01
+
+Client : ...
+Commande : NDJ-2026-000458
+
+Tacos Poulet       2 × 15 000
+Frites             1 × 5 000
+Coca               2 × 1 500
+
+Sous-total          38 000
+Livraison             2 000
+TOTAL               40 000 FC
+
+Paiement : Mobile Money
+Statut : PAYÉ
+
+PDF généré automatiquement.
+
+22. WhatsApp
+
+Les événements importants déclenchent des notifications.
+
+Commande créée
+      ↓
+Confirmation WhatsApp
+
+Cuisine terminée
+      ↓
+Commande prête
+
+Livreur affecté
+      ↓
+Lien de suivi
+
+Commande livrée
+      ↓
+Confirmation
+
+Paiement confirmé
+      ↓
+Facture PDF
+
+Point technique important : l'envoi automatique de messages et de PDF devra passer par une intégration WhatsApp Business/API appropriée ; ce n'est pas la même chose qu'ouvrir simplement WhatsApp sur le téléphone.
+
+23. Base de données — relations principales
+
+Voici le cœur du modèle :
+
+ETABLISSEMENT
+      │
+      ├──────── DEPARTEMENT
+      │
+      ├──────── UTILISATEUR
+      │
+      ├──────── STOCK
+      │             │
+      │             ├── LOT
+      │             └── MOUVEMENT_STOCK
+      │
+      ├──────── COMMANDE
+      │             │
+      │             ├── LIGNE_COMMANDE
+      │             ├── PAIEMENT
+      │             ├── FACTURE
+      │             └── LIVRAISON
+      │                       │
+      │                       └── LIVREUR
+      │                              │
+      │                              └── POSITION_GPS
+      │
+      └──────── RECETTE
+                    │
+                    └── INGREDIENT
+24. Tables principales
+etablissements
+id
+code
+nom
+type
+adresse
+telephone
+email
+latitude
+longitude
+statut
+created_at
+updated_at
+utilisateurs
+id
+nom
+telephone
+email
+username
+password_hash
+etablissement_id
+departement_id
+role_id
+statut
+created_at
+updated_at
+produits
+id
+code
+nom
+categorie_id
+unite_id
+format_id
+description
+photo
+prix_achat
+prix_vente
+stock_minimum
+statut
+lots
+id
+produit_id
+etablissement_id
+numero_lot
+date_entree
+date_peremption
+quantite_initiale
+quantite_actuelle
+prix_achat
+prix_vente
+qr_code
+mouvements_stock
+id
+produit_id
+lot_id
+etablissement_id
+type_mouvement
+quantite
+unite
+destination
+motif
+utilisateur_id
+date_heure
+reference
+commandes
+id
+numero
+client_id
+etablissement_id
+type_commande
+statut
+sous_total
+frais_livraison
+remise
+total
+created_at
+paiements
+id
+commande_id
+mode
+montant
+statut
+reference_transaction
+date_paiement
+utilisateur_id
+livraisons
+id
+commande_id
+livreur_id
+statut
+adresse
+latitude_destination
+longitude_destination
+heure_depart
+heure_livraison
+code_suivi
+positions_livreurs
+id
+livreur_id
+livraison_id
+latitude
+longitude
+vitesse
+direction
+date_heure
+25. Fonctionnement hors connexion
+
+Chaque appareil Android disposera d'une base locale.
+
+Exemple :
+
+CAISSE
+   │
+   ├── Commande 001
+   ├── Commande 002
+   ├── Commande 003
+   │
+   └── Base locale
+          │
+      INTERNET revient
+          │
+          ▼
+       SERVEUR
+
+Chaque opération possède un identifiant unique afin d'éviter les doublons.
+
+Le système devra gérer :
+
+Créé localement → En attente de synchronisation → Synchronisé → Confirmé
+
+26. Règles importantes de synchronisation
+
+Exemple :
+
+Deux caissiers travaillent hors connexion.
+
+Ils créent simultanément :
+
+Commande A
+Commande B
+
+Le système ne doit jamais produire deux fois le même numéro.
+
+Il faut donc utiliser des identifiants uniques générés localement, puis conserver un numéro métier unique côté serveur.
+
+27. Sécurité des données
+
+Le système devra utiliser :
+
+HTTPS ;
+mots de passe hachés ;
+tokens d'authentification ;
+expiration des sessions ;
+permissions côté serveur ;
+journal d'audit ;
+sauvegardes automatiques ;
+contrôle des appareils ;
+chiffrement des données sensibles.
+
+Les permissions doivent toujours être vérifiées côté serveur, pas uniquement dans l'application Android.
+
+28. Tableau de bord multi-établissements
+
+Le Super Admin pourra choisir :
+
+Tous les établissements
+
+ou :
+
+NDJ-01
+
+NDJ-02
+
+NDJ-03
+
+et consulter :
+
+chiffre d'affaires ;
+commandes ;
+bénéfices ;
+stocks ;
+pertes ;
+paiements ;
+livraisons ;
+performances des caissiers ;
+performances des livreurs.
+29. Cycle complet d'une commande
+
+Voici le scénario principal :
+
+CLIENT
+  │
+  │ commande
+  ▼
+SERVEUR
+  │
+  ▼
+CAISSE
+  │
+  ▼
+PAIEMENT
+  │
+  ▼
+CUISINE
+  │
+  ▼
+COMMANDE PRÊTE
+  │
+  ▼
+LIVREUR
+  │
+  ▼
+GPS ACTIVÉ
+  │
+  ├──────→ CLIENT : lien de suivi
+  │
+  ▼
+LIVRAISON
+  │
+  ▼
+CONFIRMATION
+  │
+  ▼
+PAIEMENT FINALISÉ
+  │
+  ▼
+FACTURE PDF
+  │
+  ▼
+WHATSAPP
+30. Ce que je recommande de verrouiller avant le développement
+
+Il reste maintenant 5 décisions techniques importantes :
+
+A. Technologie
+
+Je recommande une architecture permettant de partager un maximum de code entre Web et Android.
+
+B. Base de données
+
+Une base centrale relationnelle, avec une base locale Android pour le hors-ligne.
+
+C. Cartographie/GPS
+
+Prévoir un service cartographique compatible avec le suivi en temps réel.
+
+D. WhatsApp
+
+Prévoir une intégration WhatsApp Business/API pour les notifications et documents.
+
+E. Paiements
+
+Prévoir une couche d'intégration permettant d'ajouter plusieurs fournisseurs de paiement sans refaire le système.
+
+NDJO TACOS — ARCHITECTURE TECHNIQUE V2
+1. Principe général
+
+Le système sera construit autour de 3 niveaux :
+
+┌──────────────────────────────────────────┐
+│              INTERFACES                  │
+│                                          │
+│  🌐 Web Admin   📱 Android   👤 Client   │
+└─────────────────┬────────────────────────┘
+                  │
+                  ▼
+┌──────────────────────────────────────────┐
+│                 API                      │
+│        Auth • Ventes • Stock • GPS       │
+│        Cuisine • Livraison • Paiement    │
+│        WhatsApp • Facturation            │
+└─────────────────┬────────────────────────┘
+                  │
+                  ▼
+┌──────────────────────────────────────────┐
+│              BASE CENTRALE               │
+│        PostgreSQL / base relationnelle   │
+└──────────────────────────────────────────┘
+
+Pour Android :
+
+Android
+   │
+   ├── Base locale
+   │       ↓
+   │    Hors ligne
+   │
+   └── Synchronisation
+           ↓
+      API centrale
+2. Base de données complète
+A. Organisation
+establishments
+Champ	Type	Description
+id	UUID	Identifiant
+code	VARCHAR	NDJ-01
+name	VARCHAR	Nom
+type	VARCHAR	Restaurant, dépôt...
+address	TEXT	Adresse
+phone	VARCHAR	Téléphone
+email	VARCHAR	Email
+latitude	DECIMAL	Latitude
+longitude	DECIMAL	Longitude
+status	BOOLEAN	Actif/inactif
+created_at	DATETIME	Création
+updated_at	DATETIME	Modification
+departments
+id
+establishment_id
+name
+code
+status
+created_at
+updated_at
+
+Relation :
+
+Établissement 1 ─────── N Départements
+3. Utilisateurs
+users
+id
+name
+phone
+email
+username
+password_hash
+establishment_id
+department_id
+role_id
+status
+last_login
+created_at
+updated_at
+roles
+id
+name
+description
+permissions
+id
+code
+name
+description
+role_permissions
+role_id
+permission_id
+
+Relation :
+
+ROLE
+ │
+ └── PERMISSIONS
+4. Catalogue
+categories
+id
+name
+description
+parent_id
+status
+
+parent_id permet d'avoir :
+
+Boissons
+ ├── Gazeuses
+ ├── Jus
+ └── Eau
+products
+id
+code
+name
+category_id
+description
+image
+unit_id
+format_id
+weight
+volume
+purchase_price
+sale_price
+minimum_stock
+is_perishable
+status
+units
+id
+name
+symbol
+type
+
+Exemples :
+
+Gramme     g
+Kilogramme kg
+Millilitre ml
+Litre      L
+Pièce      pc
+formats
+id
+name
+quantity
+unit_id
+
+Exemples :
+
+Unitaire    1
+3 pcs       3
+Sixaine     6
+Douzaine    12
+24 pcs      24
+5. Lots
+product_batches
+id
+product_id
+establishment_id
+batch_number
+entry_date
+expiry_date
+initial_quantity
+current_quantity
+purchase_price
+sale_price
+qr_code
+barcode
+status
+
+Exemple :
+
+Produit : Coca-Cola 330 ml
+Lot : NDJ-COC-20260913-001
+Entrée : 13/09/2026
+Expiration : 13/03/2027
+Quantité : 48
+6. Stocks
+
+Je recommande d'avoir une table stock_locations.
+
+stock_locations
+id
+establishment_id
+name
+type
+status
+
+Exemples :
+
+NDJ-01
+ ├── Dépôt principal
+ ├── Cuisine
+ └── Bar
+stock_movements
+id
+reference
+product_id
+batch_id
+source_location_id
+destination_location_id
+movement_type
+quantity
+unit
+reason
+user_id
+created_at
+
+Types :
+
+PURCHASE
+RECEIPT
+ISSUE
+TRANSFER
+LOSS
+EXPIRY
+DAMAGE
+RETURN
+ADJUSTMENT
+PRODUCTION
+7. Fournisseurs et achats
+suppliers
+id
+name
+phone
+email
+address
+tax_number
+status
+purchases
+id
+reference
+supplier_id
+establishment_id
+total_amount
+status
+purchase_date
+created_by
+purchase_items
+id
+purchase_id
+product_id
+batch_id
+quantity
+unit_price
+total
+8. Recettes
+recipes
+id
+product_id
+name
+description
+yield_quantity
+status
+recipe_ingredients
+id
+recipe_id
+ingredient_product_id
+quantity
+unit_id
+
+Exemple :
+
+RECETTE : Tacos Poulet
+
+Poulet       150 g
+Fromage       30 g
+Sauce         20 g
+Tortilla       1 pc
+Frites       150 g
+9. Clients
+customers
+id
+name
+phone
+email
+password_hash
+address
+latitude
+longitude
+status
+created_at
+customer_addresses
+
+Je recommande de permettre plusieurs adresses par client.
+
+id
+customer_id
+label
+address
+latitude
+longitude
+is_default
+
+Exemple :
+
+Client : Jean
+
+Maison
+Travail
+Autre
+10. Commandes
+orders
+id
+order_number
+customer_id
+establishment_id
+order_type
+status
+subtotal
+discount
+delivery_fee
+total
+payment_status
+created_at
+updated_at
+
+Types :
+
+DINE_IN
+TAKEAWAY
+DELIVERY
+order_items
+id
+order_id
+product_id
+quantity
+unit_price
+discount
+total
+11. Paiements
+payments
+id
+order_id
+payment_method_id
+amount
+status
+transaction_reference
+paid_at
+received_by
+payment_methods
+id
+name
+type
+provider
+status
+
+Exemples :
+
+Cash
+Mobile Money
+Carte
+Virement
+Paiement à la livraison
+12. Cuisine
+kitchen_orders
+id
+order_id
+status
+started_at
+ready_at
+prepared_by
+
+Statuts :
+
+PENDING
+PREPARING
+READY
+CANCELLED
+13. Livraison
+delivery_zones
+id
+establishment_id
+name
+fee
+polygon
+status
+deliveries
+id
+order_id
+driver_id
+zone_id
+status
+pickup_time
+departure_time
+delivered_time
+destination_address
+destination_latitude
+destination_longitude
+tracking_token
+otp_code
+drivers
+id
+user_id
+vehicle_type
+vehicle_number
+availability_status
+is_online
+last_online_at
+14. GPS du livreur
+driver_locations
+id
+driver_id
+delivery_id
+latitude
+longitude
+accuracy
+speed
+heading
+recorded_at
+
+Le système ne doit conserver la localisation détaillée que pendant la période nécessaire au service, selon la politique de confidentialité définie par NDJO TACOS.
+
+15. Factures
+invoices
+id
+invoice_number
+order_id
+customer_id
+establishment_id
+subtotal
+discount
+delivery_fee
+total
+payment_status
+pdf_path
+issued_at
+16. Notifications
+notifications
+id
+customer_id
+order_id
+channel
+type
+message
+status
+sent_at
+
+Canaux :
+
+WHATSAPP
+SMS
+PUSH
+EMAIL
+
+Types :
+
+ORDER_CONFIRMED
+ORDER_PREPARING
+ORDER_READY
+DRIVER_ASSIGNED
+DELIVERY_STARTED
+DELIVERY_COMPLETED
+PAYMENT_CONFIRMED
+INVOICE_READY
+17. Journal d'audit
+audit_logs
+id
+user_id
+establishment_id
+action
+entity_type
+entity_id
+old_value
+new_value
+ip_address
+device_id
+created_at
+
+Exemple :
+
+Utilisateur : Jean
+Action : MODIFY_PRICE
+Produit : Coca-Cola
+Ancien prix : 1500
+Nouveau prix : 1700
+Date : 13/09/2026 18:45
+18. Synchronisation hors ligne
+sync_queue
+id
+device_id
+user_id
+operation_id
+entity_type
+entity_id
+operation
+payload
+status
+created_at
+synced_at
+
+Statuts :
+
+PENDING
+SYNCING
+SYNCED
+FAILED
+CONFLICT
+19. API
+
+L'application communiquera avec le serveur via des API.
+
+Authentification
+POST /api/auth/login
+POST /api/auth/logout
+POST /api/auth/refresh
+GET  /api/auth/me
+Établissements
+GET    /api/establishments
+POST   /api/establishments
+GET    /api/establishments/{id}
+PUT    /api/establishments/{id}
+DELETE /api/establishments/{id}
+Produits
+GET    /api/products
+POST   /api/products
+GET    /api/products/{id}
+PUT    /api/products/{id}
+DELETE /api/products/{id}
+Stock
+GET  /api/stocks
+GET  /api/stocks/movements
+POST /api/stocks/entry
+POST /api/stocks/issue
+POST /api/stocks/transfer
+POST /api/stocks/inventory
+POST /api/stocks/loss
+Commandes
+GET  /api/orders
+POST /api/orders
+GET  /api/orders/{id}
+PUT  /api/orders/{id}/status
+POST /api/orders/{id}/cancel
+Paiements
+POST /api/payments
+GET  /api/payments/{id}
+POST /api/payments/{id}/confirm
+POST /api/payments/{id}/refund
+Cuisine
+GET  /api/kitchen/orders
+POST /api/kitchen/orders/{id}/start
+POST /api/kitchen/orders/{id}/ready
+Livraison
+GET  /api/deliveries
+POST /api/deliveries
+POST /api/deliveries/{id}/assign-driver
+POST /api/deliveries/{id}/start
+POST /api/deliveries/{id}/complete
+GPS
+POST /api/drivers/location
+GET  /api/deliveries/{tracking_token}/location
+20. API de suivi public
+
+C'est important pour le lien WhatsApp.
+
+Le client reçoit par exemple :
+
+https://ndjotacos.com/track/8F7K92
+
+Cette page ne doit pas exposer les données privées du livreur.
+
+Elle affiche uniquement :
+
+Commande #NDJ-000458
+
+🟢 En livraison
+
+🚚 Votre livreur est en route
+
+📍 Position approximative
+🕐 Dernière mise à jour : 18:45
+
+Destination : votre adresse
+21. API WhatsApp
+
+Le serveur doit avoir un service spécialisé :
+
+NotificationService
+       │
+       ├── WhatsApp
+       ├── SMS
+       ├── Push
+       └── Email
+
+Ainsi, si WhatsApp change ou si NDJO TACOS veut ajouter SMS plus tard, l'application principale n'a pas besoin d'être reconstruite.
+
+22. Gestion du paiement + facture + WhatsApp
+
+Le processus final sera :
+
+                COMMANDE
+                    │
+                    ▼
+                 PAIEMENT
+                    │
+             ┌──────┴──────┐
+             │             │
+          RÉUSSI        CASH À LIVRER
+             │             │
+             ▼             ▼
+        FACTURE        EN ATTENTE
+             │             │
+             └──────┬──────┘
+                    ▼
+              LIVREUR ASSIGNÉ
+                    │
+                    ▼
+           LIEN DE SUIVI GPS
+                    │
+                    ▼
+               WHATSAPP
+                    │
+                    ▼
+             CLIENT
+23. Règles métier importantes
+Règle 1
+
+Un utilisateur appartient à un établissement, sauf Super Admin.
+
+Règle 2
+
+Un stock appartient à un établissement/emplacement.
+
+Règle 3
+
+Une sortie stock doit obligatoirement avoir un motif.
+
+Règle 4
+
+Une sortie de produit périssable doit utiliser le lot approprié selon FEFO, sauf dérogation autorisée.
+
+Règle 5
+
+Une commande ne peut pas être livrée sans livreur affecté.
+
+Règle 6
+
+Une commande « cash à la livraison » ne devient payée qu'après confirmation du paiement.
+
+Règle 7
+
+La facture doit être liée à une commande unique.
+
+Règle 8
+
+Une modification sensible doit apparaître dans le journal d'audit.
+
+Règle 9
+
+Le livreur ne partage sa localisation que lorsqu'il est autorisé et dans le contexte prévu de la livraison.
+
+Règle 10
+
+Les opérations effectuées hors ligne doivent être synchronisées sans créer de doublons.
+
+24. Flux complet de vente
+CLIENT
+  ↓
+Choisit établissement
+  ↓
+Catalogue
+  ↓
+Panier
+  ↓
+Livraison / Sur place / À emporter
+  ↓
+Paiement
+  ↓
+Commande créée
+  ↓
+Cuisine
+  ↓
+Préparation
+  ↓
+Commande prête
+  ↓
+Livreur
+  ↓
+GPS
+  ↓
+Livraison
+  ↓
+Confirmation
+  ↓
+Facture
+  ↓
+WhatsApp
+25. Ce que je propose comme prochaine phase
+
+Nous avons maintenant suffisamment de matière pour passer à la conception visuelle de l'application.
+
+Je vous propose de construire ensuite le prototype écran par écran, notamment :
+
+Écran de connexion
+Tableau de bord Admin
+Gestion établissements
+Gestion utilisateurs
+Catalogue
+Fiche produit
+Gestion des lots
+Entrée stock
+Sortie stock
+Transfert
+Inventaire
+Recettes
+Caisse
+Commandes
+Écran cuisine
+Gestion livreurs
+Carte GPS
+Livraison
+Paiements
+Facture
+Notifications WhatsApp
+Tableau de bord financier
+Rapports
+Paramètres
+Interface client
+
+Après ces écrans, on pourra produire le prototype fonctionnel de NDJO TACOS, puis choisir précisément la stack technique et commencer le développement.
+
+Pour NDJO TACOS, avec vos exigences — Web + APK Android + hors connexion + synchronisation + GPS livreur + caisse + stock + cuisine + WhatsApp + plusieurs établissements — je recommande clairement une architecture Flutter + backend API + PostgreSQL, plutôt qu'une simple application web transformée en APK.
+
+🥇 Mon choix : Flutter
+7
+
+Flutter est particulièrement adapté parce qu'une même base de code peut servir à produire :
+
+📱 Android APK
+🍎 iOS plus tard si nécessaire
+🌐 Web
+💻 éventuellement Windows/Linux pour certaines interfaces internes
+
+Pour votre cas, c'est intéressant car caisse, magasinier, cuisine et livreur peuvent utiliser des interfaces différentes tout en partageant la même logique applicative.
+
+Architecture que je recommande
+                    NDJO TACOS
+                        │
+        ┌───────────────┼────────────────┐
+        │               │                │
+     ANDROID           WEB          éventuellement iOS
+        │               │
+        └─────── Flutter ────────────────┘
+                        │
+                        ▼
+                  API BACKEND
+                        │
+        ┌───────────────┼────────────────┐
+        │               │                │
+     PostgreSQL      Redis         Services externes
+        │                              │
+        │                       ┌──────┼──────┐
+        │                       │      │      │
+        │                    WhatsApp  GPS  Paiement
+        │
+        ▼
+  Données centrales
+1. Pourquoi Flutter pour NDJO TACOS ?
+
+Votre exigence la plus difficile n'est pas simplement le Web/Android.
+
+C'est :
+
+fonctionner correctement hors connexion puis synchroniser les données lorsque Internet revient.
+
+Flutter permet de construire une vraie application mobile avec une base de données locale.
+
+Par exemple :
+
+        INTERNET
+           │
+           ▼
+      API NDJO TACOS
+           │
+           ▼
+    PostgreSQL central
+           ▲
+           │
+      Synchronisation
+           │
+     Base locale
+           │
+           ▼
+        ANDROID
+
+Même sans Internet :
+
+CAISSE
+  │
+  ├── Vente
+  ├── Paiement
+  ├── Stock
+  └── Commande
+       │
+       ▼
+Base locale
+
+Puis :
+
+Internet revient
+       ↓
+Synchronisation
+       ↓
+Serveur
+2. Base locale : SQLite
+
+Pour Android, je recommande SQLite comme base locale, avec une couche de persistance adaptée à Flutter.
+
+C'est particulièrement adapté à :
+
+caisse ;
+stock ;
+commandes ;
+cuisine ;
+catalogue ;
+données nécessaires au fonctionnement hors ligne.
+
+Il faut construire l'application selon une logique offline-first, et non simplement ajouter un « mode hors ligne » à la fin.
+
+C'est une distinction très importante.
+
+3. Backend : lequel choisir ?
+
+Pour NDJO TACOS, je recommande :
+
+Option principale : Node.js + NestJS
+Flutter
+   ↓
+REST API
+   ↓
+NestJS
+   ↓
+PostgreSQL
+
+Pourquoi NestJS ?
+
+Parce que votre système va devenir assez complexe :
+
+utilisateurs ;
+permissions ;
+établissements ;
+stock ;
+lots ;
+recettes ;
+ventes ;
+paiements ;
+livraisons ;
+GPS ;
+notifications ;
+synchronisation.
+
+NestJS permet de structurer proprement ce type de backend.
+
+4. Base de données : PostgreSQL
+
+Je choisirais PostgreSQL.
+
+Pour votre projet, c'est beaucoup plus approprié qu'une base NoSQL comme MongoDB.
+
+Vous avez énormément de relations :
+
+Établissement
+      ↓
+Stock
+      ↓
+Produit
+      ↓
+Lot
+      ↓
+Mouvement
+      ↓
+Commande
+      ↓
+Paiement
+      ↓
+Facture
+
+PostgreSQL est excellent pour maintenir la cohérence de ces données.
+
+5. GPS du livreur
+
+Flutter peut exploiter la localisation du téléphone du livreur.
+
+Architecture :
+
+Téléphone livreur
+       │
+       │ GPS
+       ▼
+Application Flutter
+       │
+       ▼
+API
+       │
+       ▼
+Serveur
+       │
+       ▼
+Position actuelle
+       │
+   ┌───┴────┐
+   ▼        ▼
+Restaurant Client
+
+Pour le suivi temps réel, on peut ensuite utiliser WebSocket afin d'éviter de devoir constamment recharger la page.
+
+6. Pourquoi je ne choisirais pas uniquement une PWA ?
+
+Une PWA peut être intéressante pour :
+
+catalogue ;
+commande client ;
+administration légère.
+
+Mais votre application interne nécessite :
+
+GPS ;
+fonctionnement hors ligne robuste ;
+stockage local ;
+caméra/scanner ;
+notifications ;
+éventuellement imprimante thermique ;
+fonctionnement prolongé en arrière-plan pour certaines tâches ;
+matériel de caisse.
+
+Pour cela, une vraie application Android Flutter est plus appropriée.
+
+7. Et React Native ?
+
+React Native est également une très bonne technologie.
+
+Je placerais néanmoins les choix ainsi pour votre projet précis :
+
+Technologie	NDJO TACOS
+Flutter	⭐⭐⭐⭐⭐
+React Native	⭐⭐⭐⭐½
+PWA seule	⭐⭐⭐
+Ionic/Capacitor	⭐⭐⭐
+Application Android native seule	⭐⭐⭐⭐
+Web → APK simple	⭐⭐
+
+Flutter gagne surtout parce que vous voulez Android + Web + une expérience cohérente + offline-first.
+
+8. Architecture que je choisirais définitivement
+Frontend
+
+Flutter
+
+Backend
+
+NestJS / Node.js
+
+Base centrale
+
+PostgreSQL
+
+Base locale
+
+SQLite
+
+Temps réel
+
+WebSocket
+
+Authentification
+
+JWT + refresh token
+
+Cartographie
+
+OpenStreetMap ou Google Maps, selon les besoins et coûts.
+
+Notifications
+
+Firebase Cloud Messaging
+
+WhatsApp
+
+WhatsApp Business Platform/API
+
+Factures
+
+Génération PDF côté serveur
+
+Stockage fichiers
+
+Object Storage compatible S3.
+
+Déploiement
+
+Docker
+
+9. Une architecture encore meilleure pour votre cas
+
+Je ferais même ceci :
+
+                     ┌───────────────┐
+                     │  PostgreSQL   │
+                     └───────▲───────┘
+                             │
+                        NestJS API
+                             │
+          ┌──────────────────┼──────────────────┐
+          │                  │                  │
+       Flutter            Flutter            Flutter
+       Android              Web              Client
+          │
+      SQLite
+          │
+    Offline-first
+          │
+   Synchronisation
+
+Et pour les services :
+
+NestJS
+ │
+ ├── Auth
+ ├── Users
+ ├── Establishments
+ ├── Products
+ ├── Inventory
+ ├── Recipes
+ ├── Orders
+ ├── Payments
+ ├── Kitchen
+ ├── Delivery
+ ├── GPS
+ ├── WhatsApp
+ ├── Invoices
+ └── Synchronization
+10. Point très important : ne pas mettre toute la logique dans Flutter
+
+Il faut éviter :
+
+Flutter
+  ↓
+fait tout
+
+Je recommande :
+
+Flutter
+   ↓
+Interface + cache local
+   ↓
+API
+   ↓
+Backend
+   ↓
+Règles métier
+   ↓
+PostgreSQL
+
+Par exemple, le prix final, les permissions, les mouvements de stock et la validation d'un paiement doivent être contrôlés côté serveur.
+
+11. Pour le hors connexion, voici la règle fondamentale
+
+Il ne faut jamais faire :
+
+« Internet est coupé → application inutilisable. »
+
+Il faut faire :
+
+Internet est coupé → l'application continue → les opérations sont mises en file → Internet revient → synchronisation.
+
+Par exemple :
+
+18:00  Vente #001   → local
+18:05  Vente #002   → local
+18:10  Sortie stock → local
+18:15  Internet revient
+18:15  Synchronisation
+18:16  Serveur OK
+
+C'est cette architecture qui rendra réellement l'application fiable.
+
+🏆 Stack finale recommandée
+
+NDJO TACOS
+
+Flutter
+↓
+SQLite / Offline-first
+↓
+NestJS / Node.js
+↓
+PostgreSQL
+↓
+WebSocket + Firebase
+↓
+GPS + WhatsApp + Paiements + PDF
+
+C'est une stack solide, moderne et évolutive pour votre projet.
+
+NDJO TACOS — ARCHITECTURE TECHNIQUE V1
+1. Stack technologique retenue
+Composant	Technologie
+Application mobile	Flutter / Dart
+Interface Web	Flutter Web
+Backend	NestJS / Node.js
+API	REST + WebSocket
+Base centrale	PostgreSQL
+Base locale Android	SQLite
+Cache	Redis
+Authentification	JWT + Refresh Token
+Notifications	Firebase Cloud Messaging
+GPS	GPS téléphone + service cartographique
+WhatsApp	WhatsApp Business Platform/API
+Factures	PDF côté serveur
+Déploiement	Docker
+Serveur	Linux/VPS/Cloud
+2. Organisation du projet
+
+Je recommande de séparer le projet en deux grands dépôts.
+
+NDJO-TACOS/
+│
+├── ndjo-tacos-app/
+│   └── Flutter
+│
+└── ndjo-tacos-api/
+    └── NestJS
+3. Architecture Flutter
+ndjo-tacos-app/
+│
+├── lib/
+│   │
+│   ├── core/
+│   │   ├── database/
+│   │   ├── network/
+│   │   ├── authentication/
+│   │   ├── synchronization/
+│   │   ├── permissions/
+│   │   ├── gps/
+│   │   └── notifications/
+│   │
+│   ├── features/
+│   │   │
+│   │   ├── auth/
+│   │   ├── dashboard/
+│   │   ├── establishments/
+│   │   ├── users/
+│   │   ├── products/
+│   │   ├── inventory/
+│   │   ├── purchases/
+│   │   ├── recipes/
+│   │   ├── sales/
+│   │   ├── orders/
+│   │   ├── kitchen/
+│   │   ├── deliveries/
+│   │   ├── drivers/
+│   │   ├── payments/
+│   │   ├── invoices/
+│   │   ├── customers/
+│   │   └── reports/
+│   │
+│   └── main.dart
+│
+└── test/
+
+L'idée est que chaque fonctionnalité soit indépendante.
+
+4. Architecture Backend NestJS
+ndjo-tacos-api/
+│
+├── src/
+│
+│   ├── auth/
+│   ├── users/
+│   ├── roles/
+│   ├── permissions/
+│   │
+│   ├── establishments/
+│   ├── departments/
+│   │
+│   ├── products/
+│   ├── categories/
+│   ├── units/
+│   ├── formats/
+│   ├── batches/
+│   │
+│   ├── inventory/
+│   ├── purchases/
+│   ├── suppliers/
+│   │
+│   ├── recipes/
+│   ├── kitchen/
+│   │
+│   ├── customers/
+│   ├── orders/
+│   ├── sales/
+│   ├── payments/
+│   │
+│   ├── drivers/
+│   ├── deliveries/
+│   ├── tracking/
+│   │
+│   ├── invoices/
+│   ├── notifications/
+│   ├── whatsapp/
+│   │
+│   ├── synchronization/
+│   ├── audit/
+│   └── reports/
+│
+└── main.ts
+5. Le principe OFFLINE-FIRST
+
+C'est le cœur technique de NDJO TACOS.
+
+L'application Android doit considérer la base locale comme disponible en permanence.
+
+Exemple
+
+Le caissier ouvre l'application :
+
+Internet : ❌
+
+NDJO TACOS fonctionne normalement.
+
+Il vend :
+
+Tacos × 2
+Coca × 1
+Total : 31 500 FC
+
+La vente est enregistrée dans SQLite.
+
+LOCAL DATABASE
+
+Sale
+NDJ-LOCAL-8F72A
+Status: PENDING_SYNC
+6. Synchronisation
+
+Lorsque Internet revient :
+
+                    SERVEUR
+                       ▲
+                       │
+                  Synchronisation
+                       │
+                ┌──────┴──────┐
+                │             │
+             Vente         Stock
+                │             │
+                └──────┬──────┘
+                       │
+                    SQLite
+                       ▲
+                       │
+                    ANDROID
+
+Chaque opération possède un operation_id unique.
+
+Ainsi, si la synchronisation est interrompue :
+
+Vente → envoyée
+       ↓
+Internet coupé
+       ↓
+Nouvel essai
+       ↓
+Serveur reconnaît operation_id
+       ↓
+Pas de doublon
+7. Gestion des conflits
+
+C'est particulièrement important avec plusieurs établissements.
+
+Exemple :
+
+Deux appareils modifient le même produit hors ligne.
+
+Le serveur doit décider :
+
+quelle modification est valide ;
+laquelle doit être rejetée ;
+laquelle nécessite une validation.
+
+Pour le stock, je recommande une règle encore plus stricte :
+
+On ne modifie jamais directement le stock.
+
+On crée toujours un mouvement.
+
+Ainsi :
+
++ 50 entrée
+- 5 sortie
+- 2 perte
++ 20 transfert
+
+Le stock est recalculé à partir des mouvements.
+
+8. Gestion des établissements
+
+Chaque donnée opérationnelle importante porte un :
+
+establishment_id
+
+Exemple :
+
+Order
+ ├── id
+ ├── establishment_id
+ └── customer_id
+
+Ainsi :
+
+NDJ-01 ne voit pas automatiquement les commandes NDJ-02.
+
+Le Super Admin possède un accès global.
+
+9. Permissions
+
+Lorsqu'un utilisateur se connecte :
+
+Utilisateur
+    ↓
+Role
+    ↓
+Permissions
+    ↓
+Établissement autorisé
+    ↓
+Interface
+
+Exemple :
+
+Caissier
+VENTE       ✅
+COMMANDES   ✅
+PAIEMENT    ✅
+STOCK       👁️ lecture limitée
+UTILISATEUR ❌
+RAPPORTS    ❌
+Magasinier
+STOCK       ✅
+INVENTAIRE  ✅
+TRANSFERT   ✅
+VENTE       ❌
+PAIEMENT    ❌
+10. Système de caisse
+
+La caisse doit être ultra rapide.
+
+Il faut éviter que le caissier fasse 15 clics pour vendre un tacos.
+
+CATÉGORIE
+   ↓
+TACOS
+   ↓
+Poulet
+   ↓
+Quantité 2
+   ↓
+PAIEMENT
+   ↓
+VALIDER
+
+En mode hors ligne, cette opération doit fonctionner immédiatement.
+
+11. Cuisine en temps réel
+
+Lorsqu'une commande est créée :
+
+CAISSE
+   ↓
+API
+   ↓
+WEBSOCKET
+   ↓
+ÉCRAN CUISINE
+
+La cuisine reçoit immédiatement :
+
+🔔 Nouvelle commande #458
+
+Lorsque la cuisine clique :
+
+PRÊTE
+
+le statut est immédiatement transmis.
+
+12. Livraison en temps réel
+
+Même logique :
+
+LIVREUR
+   │
+   │ GPS
+   ▼
+WebSocket/API
+   │
+   ├────────→ RESTAURANT
+   │
+   └────────→ CLIENT
+
+Le client ne reçoit pas les données privées du livreur.
+
+Il reçoit uniquement les informations nécessaires au suivi de sa commande.
+
+13. Gestion du GPS
+
+Le livreur possède :
+
+is_online
+availability_status
+current_delivery
+last_location
+
+Pendant la livraison :
+
+GPS
+ ↓
+Latitude
+Longitude
+Accuracy
+Timestamp
+ ↓
+Serveur
+ ↓
+Carte
+
+Il faut prévoir une fréquence de transmission raisonnable afin de ne pas vider inutilement la batterie.
+
+14. Sécurité du lien de suivi
+
+Le lien envoyé au client ne doit pas être :
+
+/driver/15
+
+mais un token aléatoire :
+
+/track/8f73Kx92Lm...
+
+Le client peut suivre sa livraison, mais ne doit pas pouvoir deviner les autres livraisons.
+
+15. WhatsApp
+
+Le backend aura un module :
+
+WhatsAppService
+
+Il pourra envoyer :
+
+Commande confirmée
+Commande prête
+Livreur affecté
+Lien GPS
+Commande livrée
+Facture PDF
+
+Le système devra également gérer :
+
+EN ATTENTE
+    ↓
+ENVOYÉ
+    ↓
+REÇU
+    ↓
+ÉCHEC
+
+En cas d'échec, le système peut réessayer.
+
+16. Facture
+
+Processus :
+
+Commande
+   ↓
+Validation
+   ↓
+InvoiceService
+   ↓
+PDF
+   ↓
+Stockage sécurisé
+   ↓
+WhatsApp
+
+La facture aura un numéro unique :
+
+NDJ-FAC-2026-000458
+
+17. Paiements
+
+Je recommande de créer une interface commune :
+
+PaymentService
+      │
+      ├── Cash
+      ├── Mobile Money
+      ├── Carte
+      ├── Virement
+      └── Autre
+
+Ainsi, si NDJO TACOS ajoute plus tard un nouveau fournisseur de paiement, on n'aura pas besoin de modifier toute l'application.
+
+18. Gestion des erreurs
+
+Chaque opération doit avoir un statut.
+
+Exemple :
+
+Commande
+PENDING
+CONFIRMED
+PREPARING
+READY
+DELIVERING
+DELIVERED
+CANCELLED
+
+Paiement :
+
+PENDING
+PROCESSING
+PAID
+FAILED
+REFUNDED
+
+Synchronisation :
+
+PENDING
+SYNCING
+SYNCED
+FAILED
+CONFLICT
+19. Sauvegarde
+
+Je recommande :
+
+Base principale
+
+PostgreSQL.
+
+Sauvegarde
+sauvegarde automatique quotidienne ;
+plusieurs points de restauration ;
+sauvegarde distante ;
+surveillance de l'état de la base.
+
+Il faut également tester régulièrement la restauration, pas seulement créer les sauvegardes.
+
+20. Déploiement
+
+Le serveur peut être organisé ainsi :
+
+                    INTERNET
+                       │
+                    HTTPS
+                       │
+                  Reverse Proxy
+                       │
+              ┌────────┴────────┐
+              │                 │
+          NestJS API        Web Flutter
+              │
+        ┌─────┴─────┐
+        │           │
+    PostgreSQL    Redis
+
+Docker permettra de déployer les différents services proprement.
+
+21. Environnement de développement
+
+Je recommande trois environnements :
+
+DEVELOPPEMENT
+     ↓
+TEST / STAGING
+     ↓
+PRODUCTION
+
+Il ne faut surtout pas développer directement sur la base de production.
+
+22. Gestion des versions
+NDJO TACOS
+
+V1.0
+├── Authentification
+├── Établissements
+├── Utilisateurs
+├── Catalogue
+├── Stock
+├── Caisse
+└── Commandes
+
+V1.1
+├── Cuisine
+├── Livraison
+└── GPS
+
+V1.2
+├── WhatsApp
+├── Factures PDF
+└── Paiements
+
+V2.0
+├── Recettes avancées
+├── Fidélité
+├── Promotions
+└── Analytics
+23. Première version à développer
+
+Je conseille de ne pas commencer directement par le GPS ou WhatsApp.
+
+Il faut d'abord construire le noyau :
+
+AUTHENTIFICATION
+       ↓
+ÉTABLISSEMENTS
+       ↓
+UTILISATEURS
+       ↓
+CATALOGUE
+       ↓
+STOCK
+       ↓
+CAISSE
+       ↓
+COMMANDES
+       ↓
+PAIEMENTS
+
+Ensuite :
+
+CUISINE
+   ↓
+LIVRAISON
+   ↓
+GPS
+   ↓
+WHATSAPP
+   ↓
+FACTURES
+
+C'est beaucoup plus sûr.
+
+24. Ordre réel de développement
+Sprint 1
+
+Architecture + base de données + authentification.
+
+Sprint 2
+
+Établissements + départements + utilisateurs + permissions.
+
+Sprint 3
+
+Catalogue + catégories + unités + formats + lots.
+
+Sprint 4
+
+Stock + entrées + sorties + transferts + inventaire.
+
+Sprint 5
+
+Caisse + commandes + paiements.
+
+Sprint 6
+
+Mode hors ligne + synchronisation.
+
+Sprint 7
+
+Cuisine.
+
+Sprint 8
+
+Livraison + livreurs.
+
+Sprint 9
+
+GPS temps réel.
+
+Sprint 10
+
+Factures PDF + WhatsApp.
+
+Sprint 11
+
+Rapports + tableau de bord.
+
+Sprint 12
+
+Tests + sécurité + déploiement.
+
+🔴 Une décision importante avant de coder
+
+Il reste maintenant à définir l'interface exacte de chaque profil.
+
+Par exemple :
+
+ADMIN → quels menus ?
+CAISSIER → quels menus ?
+MAGASINIER → quels menus ?
+CUISINIER → quels menus ?
+LIVREUR → quels menus ?
+CLIENT → quels écrans ?
+
+
+NDJO TACOS — INTERFACES & PARCOURS UTILISATEURS
+1. Écran de démarrage
+
+Au lancement :
+
+┌──────────────────────────────┐
+│                              │
+│          NDJO TACOS          │
+│                              │
+│      🍔 Bienvenue            │
+│                              │
+│       Chargement...          │
+│                              │
+└──────────────────────────────┘
+
+L'application vérifie :
+
+connexion Internet ;
+session utilisateur ;
+synchronisation en attente ;
+version de l'application.
+2. Connexion
+┌──────────────────────────────┐
+│          NDJO TACOS          │
+│                              │
+│ Nom utilisateur              │
+│ [____________________]       │
+│                              │
+│ Mot de passe                 │
+│ [____________________] 👁    │
+│                              │
+│ [       SE CONNECTER       ] │
+│                              │
+│ Mot de passe oublié ?        │
+│                              │
+│ 🟢 En ligne                  │
+└──────────────────────────────┘
+
+Si Internet est indisponible, un utilisateur déjà authentifié sur l'appareil peut continuer à travailler selon les règles de sécurité définies.
+
+3. Sélection de l'établissement
+
+Pour un utilisateur ayant plusieurs établissements autorisés :
+
+┌──────────────────────────────┐
+│ Choisissez votre établissement│
+│                              │
+│ 🏪 NDJO TACOS Centre         │
+│                              │
+│ 🏪 NDJO TACOS Kenya          │
+│                              │
+│ 🏪 NDJO TACOS Extension      │
+└──────────────────────────────┘
+
+Le Super Admin peut sélectionner :
+
+🌐 Tous les établissements
+
+4. Tableau de bord Administrateur
+┌─────────────────────────────────────────┐
+│ NDJO TACOS                👤 Admin      │
+├─────────────────────────────────────────┤
+│                                         │
+│ 💰 Ventes       🛒 Commandes            │
+│ 2 450 000 FC       186                  │
+│                                         │
+│ 📦 Stock         🚚 Livraisons          │
+│ 8 750 000 FC       47                   │
+│                                         │
+│ ⚠️ Alertes                                │
+│ 5 produits en rupture                   │
+│ 12 produits proches péremption          │
+│                                         │
+├─────────────────────────────────────────┤
+│ Établissement : [ Tous ▼ ]              │
+└─────────────────────────────────────────┘
+5. Menu Administrateur
+🏠 Tableau de bord
+
+🏢 ORGANISATION
+   ├── Établissements
+   ├── Départements
+   └── Utilisateurs
+
+🔐 SÉCURITÉ
+   ├── Rôles
+   ├── Permissions
+   └── Journal d'audit
+
+🍔 PRODUITS
+   ├── Catalogue
+   ├── Catégories
+   ├── Unités
+   ├── Formats
+   └── Recettes
+
+📦 STOCK
+   ├── Stock actuel
+   ├── Entrées
+   ├── Sorties
+   ├── Transferts
+   ├── Inventaires
+   └── Pertes
+
+🛒 VENTES
+   ├── Caisse
+   ├── Commandes
+   └── Paiements
+
+👨‍🍳 CUISINE
+
+🚚 LIVRAISON
+   ├── Livraisons
+   ├── Livreurs
+   └── Carte GPS
+
+👤 CLIENTS
+
+📄 FACTURES
+
+📊 RAPPORTS
+
+⚙️ PARAMÈTRES
+6. Interface CAISSIER
+
+Le caissier doit avoir une interface beaucoup plus simple.
+
+┌────────────────────────────────────┐
+│ CAISSE — NDJO TACOS                 │
+├────────────────────────────────────┤
+│ 🔍 Rechercher...                    │
+│                                    │
+│ [TACOS] [BOISSONS] [FRITES]        │
+│                                    │
+│ ┌────────┐ ┌────────┐ ┌────────┐  │
+│ │ Poulet │ │ Viande │ │ Mixte  │  │
+│ │15 000  │ │16 000  │ │17 000  │  │
+│ └────────┘ └────────┘ └────────┘  │
+│                                    │
+├────────────────────────────────────┤
+│ PANIER                              │
+│ 2 × Tacos Poulet       30 000 FC   │
+│ 1 × Coca                 1 500 FC   │
+│                                    │
+│ TOTAL                   31 500 FC   │
+│                                    │
+│ [ CASH ] [ MOBILE ] [ CARTE ]      │
+│                                    │
+│ [       VALIDER LA VENTE       ]   │
+└────────────────────────────────────┘
+7. Parcours caissier
+Choisir produit
+      ↓
+Quantité
+      ↓
+Type commande
+      ↓
+Paiement
+      ↓
+Validation
+      ↓
+Ticket
+      ↓
+Cuisine si nécessaire
+
+Le caissier ne voit pas :
+
+les coûts d'achat ;
+les bénéfices ;
+les autres établissements ;
+les données sensibles du stock,
+
+sauf si ses permissions l'autorisent.
+
+8. Interface MAGASINIER
+┌───────────────────────────────┐
+│ 📦 GESTION DU STOCK           │
+├───────────────────────────────┤
+│                               │
+│ 📥 Entrée stock               │
+│ 📤 Sortie stock               │
+│ 🔄 Transfert                  │
+│ 📋 Inventaire                 │
+│ ⚠️ Périmés                   │
+│ ❌ Pertes                     │
+│ 🔍 Rechercher                 │
+│                               │
+└───────────────────────────────┘
+9. Sortie stock
+
+Le magasinier sélectionne :
+
+Destination
+[ Cuisine ▼ ]
+
+Produit
+[ Poulet ▼ ]
+
+Lot
+[ NDJ-POL-20260910-001 ▼ ]
+
+Quantité
+[ 5 ] kg
+
+Motif
+[ Production ▼ ]
+
+[ VALIDER LA SORTIE ]
+
+L'application affiche avant validation :
+
+Stock disponible : 24,5 kg
+Après sortie : 19,5 kg
+
+10. Scan QR / code-barres
+
+Le magasinier pourra utiliser la caméra :
+
+┌──────────────────────────────┐
+│       SCANNER LE LOT         │
+│                              │
+│          ┌──────┐            │
+│          │      │            │
+│          │ QR   │            │
+│          │      │            │
+│          └──────┘            │
+│                              │
+│        [ Scanner ]           │
+└──────────────────────────────┘
+
+Après scan :
+
+Coca-Cola 330 ml
+Lot NDJ-COC-001
+Péremption : 13/03/2027
+Stock : 48
+
+11. Interface CUISINE
+
+La cuisine doit être très simple.
+
+┌────────────────────────────────────┐
+│ 👨‍🍳 CUISINE                         │
+├────────────────────────────────────┤
+│ 🔴 NOUVELLES                        │
+│                                    │
+│ #458                               │
+│ 2 × Tacos Poulet                   │
+│ 1 × Frites                         │
+│ 2 × Coca                            │
+│                                    │
+│ [ COMMENCER ]                      │
+│                                    │
+├────────────────────────────────────┤
+│ 🟡 EN PRÉPARATION                  │
+│                                    │
+│ #457                               │
+│ 3 × Tacos Viande                   │
+│                                    │
+│ [ TERMINÉ ]                        │
+└────────────────────────────────────┘
+12. Interface LIVREUR
+┌──────────────────────────────┐
+│ 🚚 LIVRAISON                 │
+├──────────────────────────────┤
+│ Statut                       │
+│ 🟢 DISPONIBLE                │
+│                              │
+│ [ PASSER HORS LIGNE ]        │
+│                              │
+│ 📦 Livraison #458            │
+│ Client : Jean                │
+│ Téléphone : XXX              │
+│ Destination : Quartier X     │
+│                              │
+│ [ ACCEPTER ]                 │
+└──────────────────────────────┘
+13. Navigation du livreur
+
+Après acceptation :
+
+COMMANDE #458
+      ↓
+[ RÉCUPÉRER ]
+      ↓
+Navigation
+      ↓
+[ DÉMARRER LIVRAISON ]
+      ↓
+GPS actif
+      ↓
+[ ARRIVÉ CHEZ LE CLIENT ]
+      ↓
+OTP client
+      ↓
+Paiement si nécessaire
+      ↓
+[ LIVRÉ ]
+14. Paiement cash du livreur
+
+Si :
+
+Total = 40 000 FC
+Paiement = Cash
+
+Le livreur voit :
+
+💰 À ENCAISSER
+
+40 000 FC
+
+[ PAIEMENT REÇU ]
+
+Après confirmation :
+
+🔐 Entrer/recevoir le code OTP
+
+Puis :
+
+✅ Livraison confirmée
+
+15. Interface CLIENT
+
+Le client ouvre le site ou l'application.
+
+┌──────────────────────────────────┐
+│ NDJO TACOS              🛒       │
+├──────────────────────────────────┤
+│ 📍 Choisir votre établissement   │
+│                                  │
+│ 🍔 TACOS                         │
+│                                  │
+│ [ Poulet ] [ Viande ] [ Mixte ] │
+│                                  │
+│ 🥤 BOISSONS                     │
+│                                  │
+│ [ Coca ] [ Fanta ] [ Eau ]      │
+│                                  │
+│ 🍟 ACCOMPAGNEMENTS               │
+│                                  │
+│ [ Frites ]                       │
+└──────────────────────────────────┘
+16. Panier client
+PANIER
+
+2 × Tacos Poulet      30 000 FC
+1 × Frites             5 000 FC
+2 × Coca               3 000 FC
+
+Sous-total             38 000 FC
+Livraison               2 000 FC
+
+TOTAL                  40 000 FC
+
+[ COMMANDER ]
+17. Choix de livraison
+TYPE DE COMMANDE
+
+○ Sur place
+○ À emporter
+● Livraison
+
+Adresse :
+[________________________]
+
+📍 Utiliser ma position
+
+Zone :
+Zone 2
+
+Frais de livraison :
+2 000 FC
+18. Paiement client
+MODE DE PAIEMENT
+
+○ Cash à la livraison
+○ Mobile Money
+○ Carte
+○ Autre
+
+TOTAL : 40 000 FC
+
+[ CONFIRMER LA COMMANDE ]
+19. Suivi de commande
+COMMANDE #NDJ-000458
+
+✅ Commande reçue
+✅ Commande confirmée
+✅ En préparation
+✅ Commande prête
+🟢 En livraison
+
+              🚚
+              ↓
+             📍
+              ↓
+              🏠
+
+Livreur : Patrick
+
+[ SUIVRE LE LIVREUR ]
+20. Notifications WhatsApp
+
+Le client reçoit automatiquement :
+
+Commande confirmée
+
+Votre commande #NDJ-000458 a été confirmée.
+
+Commande prête
+
+Votre commande est prête.
+
+Livreur affecté
+
+Votre commande est confiée à Patrick.
+
+Livraison
+
+🚚 Votre commande est en route. Suivez-la ici : [lien sécurisé]
+
+Facture
+
+📄 Merci pour votre commande. Votre facture est disponible ici.
+
+21. Gestion des notifications
+
+L'administrateur pourra configurer :
+
+☑ Confirmation commande
+☑ Commande en préparation
+☑ Commande prête
+☑ Livreur affecté
+☑ Départ livraison
+☑ Livraison terminée
+☑ Confirmation paiement
+☑ Facture
+22. Écran rapports
+
+L'administrateur pourra filtrer :
+
+Période
+[ Aujourd'hui ▼ ]
+
+Établissement
+[ Tous ▼ ]
+
+Département
+[ Tous ▼ ]
+
+Utilisateur
+[ Tous ▼ ]
+
+[ AFFICHER ]
+
+Puis :
+
+VENTES
+
+Chiffre d'affaires       2 450 000 FC
+Nombre commandes               186
+Panier moyen               13 172 FC
+
+Coût matières             1 250 000 FC
+Marge estimée             1 200 000 FC
+23. Notifications de stock
+
+Le système doit automatiquement signaler :
+
+🔴 Rupture
+
+Coca-Cola : stock = 0
+
+🟠 Stock faible
+
+Poulet : 4 kg restant
+
+⚠️ Péremption proche
+
+Fromage — expiration dans 3 jours
+
+🔴 Produit expiré
+
+Produit à retirer immédiatement.
+
+24. Navigation globale
+
+Pour l'architecture UX, je recommande :
+
+ADMIN
+│
+├── Dashboard
+├── Organisation
+├── Utilisateurs
+├── Catalogue
+├── Stock
+├── Recettes
+├── Ventes
+├── Commandes
+├── Cuisine
+├── Livraisons
+├── Clients
+├── Factures
+├── Rapports
+└── Paramètres
+
+CAISSIER
+│
+├── Caisse
+├── Commandes
+└── Historique
+
+MAGASINIER
+│
+├── Stock
+├── Entrées
+├── Sorties
+├── Transferts
+└── Inventaire
+
+CUISINIER
+│
+└── Commandes cuisine
+
+LIVREUR
+│
+├── Disponibilité
+├── Livraisons
+├── Navigation
+└── Historique
+
+CLIENT
+│
+├── Catalogue
+├── Panier
+├── Commandes
+├── Suivi
+└── Profil
+25. Maintenant, nous avons les 5 couches de conception
+
+Nous avons progressivement défini :
+
+① Cahier des charges
+→ Ce que NDJO TACOS doit faire.
+
+② Architecture fonctionnelle
+→ Comment les modules communiquent.
+
+③ Base de données + API
+→ Comment les données sont structurées.
+
+④ Architecture technique
+→ Flutter + SQLite + NestJS + PostgreSQL + WebSocket.
+
+⑤ Interfaces et parcours
+→ Ce que chaque utilisateur voit et fait.
+
+🚀 Étape 6 — Passage au prototype
+
+La prochaine étape est maintenant de définir le prototype UI complet, avec :
+
+charte graphique NDJO TACOS ;
+couleurs ;
+typographie ;
+boutons ;
+cartes ;
+tableaux ;
+navigation ;
+écran de connexion ;
+dashboard ;
+caisse ;
+stock ;
+cuisine ;
+livraison ;
+GPS ;
+interface client.
+
+
+26. MODULE OBLIGATOIRE DÈS LA V1 — MISE À JOUR EN LIGNE
+
+Ce module n'est pas une évolution future. Il fait partie du noyau, au même titre que l'authentification et le catalogue.
+
+NDJO TACOS déploie des caisses, tablettes cuisine, téléphones livreurs et un site client. On ne peut pas aller mettre à jour chaque appareil à la main. Tout ce qui peut changer sans nouvelle APK doit être publiable depuis le Web Admin. L'APK elle-même doit aussi pouvoir être poussée en ligne.
+
+26.1. Trois familles de mises à jour
+
+A. Mise à jour applicative (APK / application)
+Nouvelle version du logiciel (écran, bugs, nouvelles fonctions).
+Téléchargement depuis le serveur NDJO TACOS, sans passer obligatoirement par le Play Store.
+
+B. Mise à jour métier / contenu (sans réinstaller l'application)
+Catalogue, prix, photos, catégories, recettes, horaires, zones de livraison, frais, promotions, messages, modes de paiement, paramètres.
+
+C. Configuration distante (remote config)
+Interrupteurs et règles : forcer une mise à jour, fermer les commandes en ligne, activer un mode, message d'accueil, TVA, etc.
+
+26.2. Centre de mises à jour (outil Super Admin / Admin établissement)
+
+Menu : Paramètres → Mises à jour en ligne
+
+Onglets :
+- Versions application (APK)
+- Publications catalogue
+- Configuration distante
+- Déploiements par établissement
+- Historique / rollback
+
+Actions :
+- Créer un brouillon
+- Prévisualiser
+- Planifier (date/heure)
+- Publier maintenant
+- Cibler 1, plusieurs ou tous les établissements
+- Forcer la mise à jour (bloquant) ou la proposer (optionnelle)
+- Annuler une publication planifiée
+- Restaurer une version précédente
+
+26.3. Versions APK
+
+Chaque version enregistrée contient :
+- numero_version (ex. 1.2.0)
+- build_number (ex. 120)
+- plateforme (android / web)
+- fichier APK ou URL de téléchargement
+- notes de version
+- version_minimale_requise
+- force_update (oui/non)
+- établissements cibles
+- statut : BROUILLON / PUBLIÉE / DÉPRÉCIÉE
+- date de publication
+- auteur
+
+Au lancement, l'application vérifie déjà :
+connexion Internet ;
+session utilisateur ;
+synchronisation en attente ;
+version de l'application.
+
+Si une version plus récente existe :
+- optionnelle → bandeau « Mettre à jour »
+- forcée → écran bloquant, téléchargement, installation
+- si hors ligne → l'appareil continue avec la dernière version connue, puis propose la MAJ dès le retour réseau
+- si build local < version_minimale_requise → blocage même hors ligne après expiration du délai de grâce (sauf caisse déjà ouverte : terminer le service en cours)
+
+26.4. Publications catalogue (hot update)
+
+Le catalogue n'est jamais modifié « en direct » sur les caisses.
+
+Flux :
+BROUILLON → CONTRÔLE → PUBLIÉ → APPLIQUÉ SUR LES APPAREILS
+
+Une publication catalogue est un instantané versionné :
+- identifiant (PUB-20260913-001)
+- établissement(s)
+- liste des produits / catégories / prix / photos / recettes concernés
+- hash de contenu
+- auteur
+- date
+- statut
+
+Quand l'admin clique « Publier » :
+1. Le serveur enregistre l'instantané.
+2. Les appareils connectés reçoivent l'événement (WebSocket).
+3. Les appareils hors ligne l'appliqueront à la prochaine synchronisation.
+4. L'application remplace le catalogue local de façon atomique (tout ou rien).
+5. Les commandes déjà ouvertes gardent les prix du moment de la prise de commande.
+
+L'admin peut modifier un prix en ligne à 14h00. Toutes les caisses, la cuisine et le catalogue client affichent le nouveau prix sans réinstaller l'APK.
+
+26.5. Configuration distante
+
+Clés gérées en ligne, exemples :
+- commandes_en_ligne_ouvertes
+- livraison_active
+- message_accueil
+- frais_livraison_defaut
+- tva_active
+- force_update_apk
+- maintenance_mode
+- whatsapp_actif
+- horaires_par_etablissement
+
+Modification immédiate, tracée dans le journal d'audit.
+
+26.6. Ciblage et déploiement progressif
+
+Une mise à jour peut viser :
+- tous les établissements
+- un établissement
+- un rôle (ex. caisses seulement)
+- un pourcentage d'appareils (déploiement progressif)
+
+Exemple :
+Publier le nouveau tarif d'abord sur NDJ-01 Centre, vérifier 1 heure, puis déployer sur NDJ-02 Kenya.
+
+26.7. Règles hors ligne
+
+- Les appareils conservent le dernier catalogue et la dernière config valides.
+- Une publication reçue partiellement n'est jamais appliquée.
+- Conflit : le serveur fait foi pour catalogue, prix, recettes, config.
+- La caisse locale fait foi pour les ventes créées hors ligne, jusqu'à synchronisation.
+- Un changement de prix publié pendant une coupure s'applique au retour réseau, uniquement pour les nouvelles commandes.
+
+26.8. Permissions
+
+- Super administrateur : publier globalement, uploader une APK, forcer une MAJ, rollback.
+- Administrateur d'établissement : publier catalogue / prix / config de SON établissement.
+- Gestionnaire : proposer un brouillon, pas publier (sauf permission explicite).
+- Caissier, magasinier, cuisinier, livreur, client : recevoir et appliquer, jamais publier.
+
+Permissions granulaires :
+- voir_mises_a_jour
+- creer_brouillon
+- publier_catalogue
+- publier_config
+- uploader_apk
+- forcer_mise_a_jour
+- rollback
+
+26.9. Journal d'audit (obligatoire)
+
+Chaque publication enregistre :
+utilisateur, établissement, type (APK / catalogue / config), ancien contenu, nouveau contenu, date/heure, appareils concernés, résultat (succès / échec / en attente).
+
+Exemple :
+Jean a modifié le prix du Coca-Cola
+Ancien prix : 1 500 FC
+Nouveau prix : 1 700 FC
+Publication : PUB-20260913-014
+Appliqué : 4 caisses, 1 cuisine, site client
+
+26.10. API nécessaires dès la V1
+
+GET  /updates/app?platform=&build=&establishmentId=
+     → { updateRequired, force, version, url, notes, minBuild }
+
+GET  /updates/catalog?establishmentId=&sinceVersion=
+     → instantané ou delta + hash + version
+
+GET  /updates/config?establishmentId=
+     → clés de configuration
+
+POST /admin/app-versions          (upload / enregistrer une APK)
+POST /admin/publications          (créer un brouillon catalogue)
+POST /admin/publications/:id/publish
+POST /admin/publications/:id/rollback
+PUT  /admin/remote-config
+GET  /admin/deployments           (état par appareil / établissement)
+
+WebSocket : event "catalog.published", "config.updated", "app.update_available"
+
+26.11. Écran appareil — mise à jour forcée
+
+┌──────────────────────────────┐
+│          NDJO TACOS          │
+│                              │
+│   Nouvelle version 1.2.0     │
+│                              │
+│   Cette mise à jour est      │
+│   obligatoire pour continuer │
+│                              │
+│   [  TÉLÉCHARGER  12 Mo  ]   │
+│                              │
+│   ████████░░░░  64 %         │
+└──────────────────────────────┘
+
+26.12. Impact sur l'ordre de développement
+
+Le Sprint 1 inclut désormais :
+Architecture + base de données + authentification + moteur de mise à jour en ligne.
+
+Sans ce moteur, chaque changement de prix ou de produit exigerait une nouvelle APK ou une intervention sur place.
+
+

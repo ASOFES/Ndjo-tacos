@@ -1,0 +1,648 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Establishment {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String
+  type         String
+  address      String?
+  phone        String?
+  email        String?
+  manager      String?
+  latitude     String?
+  longitude    String?
+  hours        String?
+  deliveryZone String?
+  status       String   @default("ACTIF")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users           User[]
+  departments     Department[]
+  categories      Category[]
+  products        Product[]
+  publications    Publication[]
+  remoteConfigs   RemoteConfig[]
+  deployments     DeviceDeployment[]
+  lots            Lot[]
+  movements       StockMovement[]
+  orders          Order[]
+  recipes         Recipe[]
+  transfersOut    Transfer[] @relation("TransferSource")
+  transfersIn     Transfer[] @relation("TransferDest")
+  customers       Customer[]
+  deliveryZones   DeliveryZone[]
+  inventories     InventorySession[]
+  losses          StockLoss[]
+  suppliers       Supplier[]
+  purchases       Purchase[]
+}
+
+model Department {
+  id              String   @id @default(cuid())
+  name            String
+  status          String   @default("ACTIF")
+  establishmentId String
+  createdAt       DateTime @default(now())
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id])
+  users         User[]
+
+  @@unique([establishmentId, name])
+}
+
+model User {
+  id              String   @id @default(cuid())
+  name            String
+  username        String   @unique
+  passwordHash    String
+  role            String
+  phone           String?
+  email           String?
+  photoUrl        String?
+  availability    String   @default("HORS_LIGNE")
+  establishmentId String?
+  departmentId    String?
+  status          String   @default("ACTIF")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  establishment  Establishment?  @relation(fields: [establishmentId], references: [id])
+  department     Department?     @relation(fields: [departmentId], references: [id])
+  publications   Publication[]
+  audits         AuditLog[]
+  movements      StockMovement[]
+  orders         Order[]         @relation("CashierOrders")
+  driverOrders   Order[]         @relation("DriverOrders")
+  deliveredOrders Order[]        @relation("DeliveredBy")
+  payments              Payment[]
+  inventoriesCounted    InventorySession[] @relation("InventoryCounted")
+  inventoriesValidated  InventorySession[] @relation("InventoryValidated")
+  inventoryCounts       InventoryLine[]    @relation("InventoryLineCounted")
+  lossesDeclared        StockLoss[]        @relation("LossDeclared")
+  lossesValidated       StockLoss[]        @relation("LossValidated")
+  purchases             Purchase[]
+  refreshTokens         RefreshToken[]
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Category {
+  id              String   @id @default(cuid())
+  name            String
+  establishmentId String
+  createdAt       DateTime @default(now())
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id])
+  products      Product[]
+}
+
+model Product {
+  id              String   @id @default(cuid())
+  code            String
+  name            String
+  description     String?
+  unit            String   @default("unité")
+  priceBuy        Int      @default(0)
+  priceSell       Int
+  stockAlert      Int      @default(5)
+  photoUrl        String?
+  subcategory     String?
+  volume          String?
+  format          String?  @default("Unitaire")
+  supplier        String?
+  kind            String   @default("VENTE")
+  status          String   @default("ACTIF")
+  establishmentId String
+  categoryId      String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id])
+  category      Category      @relation(fields: [categoryId], references: [id])
+  lots          Lot[]
+  movements     StockMovement[]
+  orderItems    OrderItem[]
+  recipe         Recipe?
+  recipeItems    RecipeItem[]
+  inventoryLines InventoryLine[]
+  losses         StockLoss[]
+  purchaseLines  PurchaseLine[]
+  transfers      Transfer[]
+
+  @@unique([establishmentId, code])
+}
+
+model Lot {
+  id              String    @id @default(cuid())
+  number          String
+  productId       String
+  establishmentId String
+  entryDate       DateTime  @default(now())
+  expiryDate      DateTime?
+  qtyInitial      Float
+  qtyCurrent      Float
+  priceBuy        Int
+  priceSell       Int
+  location        String    @default("Dépôt principal")
+  purchaseId      String?
+  supplierId      String?
+  status          String    @default("ACTIF")
+  createdAt       DateTime  @default(now())
+
+  product        Product         @relation(fields: [productId], references: [id])
+  establishment  Establishment   @relation(fields: [establishmentId], references: [id])
+  purchase       Purchase?       @relation(fields: [purchaseId], references: [id])
+  supplier       Supplier?       @relation(fields: [supplierId], references: [id])
+  movements      StockMovement[]
+  inventoryLines InventoryLine[]
+  losses         StockLoss[]
+
+  @@unique([establishmentId, number])
+}
+
+model Supplier {
+  id              String   @id @default(cuid())
+  name            String
+  phone           String?
+  email           String?
+  address         String?
+  status          String   @default("ACTIF")
+  notes           String?
+  establishmentId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id])
+  purchases     Purchase[]
+  lots          Lot[]
+
+  @@unique([establishmentId, name])
+}
+
+model Purchase {
+  id              String    @id @default(cuid())
+  number          String    @unique
+  status          String    @default("BROUILLON")
+  notes           String?
+  location        String    @default("Dépôt principal")
+  total           Int       @default(0)
+  orderedAt       DateTime  @default(now())
+  receivedAt      DateTime?
+  supplierId      String
+  establishmentId String
+  createdById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  supplier      Supplier      @relation(fields: [supplierId], references: [id])
+  establishment Establishment @relation(fields: [establishmentId], references: [id])
+  createdBy     User          @relation(fields: [createdById], references: [id])
+  lines         PurchaseLine[]
+  lots          Lot[]
+}
+
+model PurchaseLine {
+  id          String  @id @default(cuid())
+  purchaseId  String
+  productId   String
+  quantity    Float
+  receivedQty Float   @default(0)
+  unit        String
+  unitPrice   Int
+  lineTotal   Int
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id])
+}
+
+model StockMovement {
+  id              String   @id @default(cuid())
+  number          String   @unique
+  type            String
+  quantity        Float
+  motif           String?
+  destination     String?
+  productId       String
+  lotId           String?
+  establishmentId String
+  userId          String
+  clientUuid      String?
+  createdAt       DateTime @default(now())
+
+  product       Product       @relation(fields: [productId], references: [id])
+  lot           Lot?          @relation(fields: [lotId], references: [id])
+  establishment Establishment @relation(fields: [establishmentId], references: [id])
+  user          User          @relation(fields: [userId], references: [id])
+
+  @@index([clientUuid])
+}
+
+model InventorySession {
+  id              String    @id @default(cuid())
+  number          String    @unique
+  location        String    @default("Dépôt principal")
+  status          String    @default("EN_COURS")
+  notes           String?
+  establishmentId String
+  countedById     String
+  validatedById   String?
+  countedAt       DateTime  @default(now())
+  submittedAt     DateTime?
+  validatedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id])
+  countedBy     User          @relation("InventoryCounted", fields: [countedById], references: [id])
+  validatedBy   User?         @relation("InventoryValidated", fields: [validatedById], references: [id])
+  lines         InventoryLine[]
+}
+
+model InventoryLine {
+  id              String    @id @default(cuid())
+  inventoryId     String
+  productId       String
+  lotId           String
+  unit            String
+  theoreticalQty  Float
+  realQty         Float?
+  variance        Float?
+  note            String?
+  countedById     String?
+  countedAt       DateTime?
+
+  inventory InventorySession @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  product   Product          @relation(fields: [productId], references: [id])
+  lot       Lot              @relation(fields: [lotId], references: [id])
+  countedBy User?            @relation("InventoryLineCounted", fields: [countedById], references: [id])
+}
+
+model StockLoss {
+  id              String    @id @default(cuid())
+  number          String    @unique
+  quantity        Float
+  unit            String
+  motif           String
+  note            String?
+  status          String    @default("DECLAREE")
+  occurredAt      DateTime
+  declaredAt      DateTime  @default(now())
+  validatedAt     DateTime?
+  productId       String
+  lotId           String
+  establishmentId String
+  declaredById    String
+  validatedById   String?
+  movementId      String?
+
+  product     Product       @relation(fields: [productId], references: [id])
+  lot         Lot           @relation(fields: [lotId], references: [id])
+  establishment Establishment @relation(fields: [establishmentId], references: [id])
+  declaredBy  User          @relation("LossDeclared", fields: [declaredById], references: [id])
+  validatedBy User?         @relation("LossValidated", fields: [validatedById], references: [id])
+}
+
+model Customer {
+  id              String   @id @default(cuid())
+  name            String
+  phone           String
+  email           String?
+  notes           String?
+  status          String   @default("ACTIF")
+  establishmentId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  establishment Establishment     @relation(fields: [establishmentId], references: [id])
+  addresses     CustomerAddress[]
+  orders        Order[]
+
+  @@unique([establishmentId, phone])
+}
+
+model CustomerAddress {
+  id         String   @id @default(cuid())
+  customerId String
+  zoneId     String?
+  label      String   @default("Maison")
+  address    String
+  latitude   String?
+  longitude  String?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  customer Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  zone     DeliveryZone? @relation(fields: [zoneId], references: [id])
+  orders   Order[]
+}
+
+model DeliveryZone {
+  id              String   @id @default(cuid())
+  code            String
+  name            String
+  fee             Int
+  status          String   @default("ACTIF")
+  establishmentId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  establishment Establishment     @relation(fields: [establishmentId], references: [id])
+  addresses     CustomerAddress[]
+  orders        Order[]
+
+  @@unique([establishmentId, code])
+}
+
+model Order {
+  id              String   @id @default(cuid())
+  clientUuid      String?  @unique
+  number          String   @unique
+  type            String
+  status          String
+  paymentStatus   String   @default("EN_ATTENTE")
+  customerName    String?
+  customerPhone   String?
+  address         String?
+  zone            String?
+  deliveryFee     Int      @default(0)
+  customerId      String?
+  addressId       String?
+  zoneId          String?
+  total           Int
+  paid            Int      @default(0)
+  changeDue       Int      @default(0)
+  driverId        String?
+  otp             String?
+  trackingToken   String?  @unique
+  pickedUpAt      DateTime?
+  departedAt      DateTime?
+  arrivedAt       DateTime?
+  deliveredAt     DateTime?
+  deliveredLat    Float?
+  deliveredLng    Float?
+  proofPhotoUrl   String?
+  proofSignature  String?
+  otpSentAt       DateTime?
+  otpVerifiedAt   DateTime?
+  deliveredById   String?
+  establishmentId String
+  userId          String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  establishment   Establishment    @relation(fields: [establishmentId], references: [id])
+  user            User             @relation("CashierOrders", fields: [userId], references: [id])
+  driver          User?            @relation("DriverOrders", fields: [driverId], references: [id])
+  deliveredBy     User?            @relation("DeliveredBy", fields: [deliveredById], references: [id])
+  customer        Customer?        @relation(fields: [customerId], references: [id])
+  deliveryAddress CustomerAddress? @relation(fields: [addressId], references: [id])
+  deliveryZone    DeliveryZone?    @relation(fields: [zoneId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+  invoice         Invoice?
+  notifications   NotificationLog[]
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  productId String
+  name      String
+  quantity  Int
+  unitPrice Int
+  lineTotal Int
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Payment {
+  id             String    @id @default(cuid())
+  orderId        String
+  method         String
+  status         String    @default("EN_ATTENTE")
+  amount         Int
+  received       Int
+  changeDue      Int
+  provider       String?
+  providerRef    String?   @unique
+  operatorRef    String?
+  checkoutUrl    String?
+  webhookPayload String?
+  userId         String
+  createdAt      DateTime  @default(now())
+  confirmedAt    DateTime?
+
+  order Order @relation(fields: [orderId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+}
+
+model AppVersion {
+  id          String    @id @default(cuid())
+  version     String
+  buildNumber Int
+  platform    String
+  downloadUrl String?
+  fileName    String?
+  notes       String?
+  minBuild    Int       @default(1)
+  forceUpdate Boolean   @default(false)
+  status      String    @default("BROUILLON")
+  createdAt   DateTime  @default(now())
+  publishedAt DateTime?
+}
+
+model Publication {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  type            String
+  status          String    @default("BROUILLON")
+  snapshot        String
+  hash            String
+  establishmentId String
+  authorId        String
+  createdAt       DateTime  @default(now())
+  publishedAt     DateTime?
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id])
+  author        User          @relation(fields: [authorId], references: [id])
+}
+
+model RemoteConfig {
+  id              String   @id @default(cuid())
+  key             String
+  value           String
+  establishmentId String
+  updatedAt       DateTime @updatedAt
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id])
+
+  @@unique([establishmentId, key])
+}
+
+model DeviceDeployment {
+  id              String    @id @default(cuid())
+  deviceName      String
+  role            String
+  appBuild        Int
+  catalogVersion  String?
+  status          String    @default("A_JOUR")
+  pendingOps      Int       @default(0)
+  lastSyncAt      DateTime?
+  lastError       String?
+  establishmentId String
+  lastSeenAt      DateTime  @default(now())
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id])
+}
+
+model Recipe {
+  id              String   @id @default(cuid())
+  productId       String   @unique
+  establishmentId String
+  createdAt       DateTime @default(now())
+
+  product       Product       @relation(fields: [productId], references: [id])
+  establishment Establishment @relation(fields: [establishmentId], references: [id])
+  items         RecipeItem[]
+}
+
+model RecipeItem {
+  id            String @id @default(cuid())
+  recipeId      String
+  ingredientId  String
+  quantity      Float
+  unit          String
+
+  recipe     Recipe  @relation(fields: [recipeId], references: [id])
+  ingredient Product @relation(fields: [ingredientId], references: [id])
+}
+
+model Transfer {
+  id         String   @id @default(cuid())
+  number     String   @unique
+  sourceId   String
+  destId     String
+  productId  String
+  lotId      String?
+  quantity   Float
+  status     String   @default("CREE")
+  shippedAt  DateTime?
+  receivedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  source  Establishment @relation("TransferSource", fields: [sourceId], references: [id])
+  dest    Establishment @relation("TransferDest", fields: [destId], references: [id])
+  product Product       @relation(fields: [productId], references: [id])
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  number      String   @unique
+  orderId     String   @unique
+  total       Int
+  content     String
+  pdfPath     String?
+  verifyToken String?
+  qrPayload   String?
+  createdAt   DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+model NotificationLog {
+  id                String   @id @default(cuid())
+  channel           String
+  title             String
+  message           String
+  status            String   @default("EN_ATTENTE")
+  providerMessageId String?
+  error             String?
+  orderId           String?
+  createdAt         DateTime @default(now())
+
+  order Order? @relation(fields: [orderId], references: [id])
+}
+
+model AuditLog {
+  id              String   @id @default(cuid())
+  action          String
+  entity          String
+  entityId        String?
+  details         String
+  oldValue        String?
+  newValue        String?
+  establishmentId String?
+  deviceId        String?
+  ipAddress       String?
+  userId          String?
+  createdAt       DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model Permission {
+  id    String @id @default(cuid())
+  key   String @unique
+  label String
+  roles RolePermission[]
+}
+
+model RolePermission {
+  role         String
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([role, permissionId])
+}
+
+model Sequence {
+  key   String @id
+  value Int
+}
+
+model SyncOperation {
+  id              String    @id @default(cuid())
+  clientUuid      String    @unique
+  type            String
+  payload         String
+  status          String    @default("APPLIQUE")
+  error           String?
+  userId          String
+  establishmentId String
+  createdAt       DateTime  @default(now())
+  appliedAt       DateTime?
+}
+
+model DriverLocation {
+  id         String   @id @default(cuid())
+  driverId   String
+  orderId    String?
+  latitude   Float
+  longitude  Float
+  recordedAt DateTime @default(now())
+}
+
+model SystemFlag {
+  key       String   @id
+  status    String
+  message   String?
+  updatedAt DateTime @updatedAt
+}

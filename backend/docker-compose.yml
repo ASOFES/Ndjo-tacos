@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ndjo_tacos
+      POSTGRES_USER: ndjo
+      POSTGRES_PASSWORD: ndjo
+    ports:
+      - "5432:5432"
+    volumes:
+      - ndjo_pg:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ndjo -d ndjo_tacos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  ndjo_pg:

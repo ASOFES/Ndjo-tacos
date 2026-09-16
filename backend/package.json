@@ -1,0 +1,50 @@
+{
+  "name": "ndjo-tacos-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "nest start",
+    "start:prod": "node dist/src/main.js",
+    "start:dev": "nest start --watch",
+    "build": "prisma generate && nest build",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "db:up": "node scripts/start-postgres.mjs",
+    "db:docker": "docker compose up -d",
+    "backup": "powershell -File scripts/backup-postgres.ps1",
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/platform-socket.io": "^11.2.3",
+    "@nestjs/throttler": "^6.5.0",
+    "@nestjs/websockets": "^11.2.3",
+    "@prisma/client": "^6.16.1",
+    "bcryptjs": "^3.0.2",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.4",
+    "helmet": "^8.3.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.10",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/express": "^5.0.3",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^24.5.2",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "prisma": "^6.16.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}

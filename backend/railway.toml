@@ -1,0 +1,8 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm install && npx prisma generate && npx nest build"
+
+[deploy]
+startCommand = "npx prisma migrate deploy && node dist/src/main.js"
+healthcheckPath = "/health"
+restartPolicyType = "ON_FAILURE"

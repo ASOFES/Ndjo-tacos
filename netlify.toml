@@ -1,0 +1,18 @@
+[build]
+  base = "app"
+  command = """
+    git clone --depth 1 -b stable https://github.com/flutter/flutter.git "$HOME/flutter"
+    export PATH="$HOME/flutter/bin:$PATH"
+    flutter config --no-analytics --enable-web
+    flutter pub get
+    flutter build web --release --dart-define=API_BASE=$API_BASE
+  """
+  publish = "build/web"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
