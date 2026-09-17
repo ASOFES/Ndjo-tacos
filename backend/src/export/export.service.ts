@@ -1,9 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { ReportsService } from '../reports/reports.service';
-import { companyPdfLines } from '../invoices/company';
 import { ExcelSheet, buildExcel } from './excel';
-import { buildPdf } from './pdf';
+import { PdfDocument, PdfTable, buildPremiumPdf, fcPdf } from './pdf';
 
 export type ExportKind = 'stock' | 'catalog' | 'sales' | 'reports';
 export type ExportFormat = 'xls' | 'pdf';
@@ -45,7 +44,7 @@ export class ExportService {
     }
     if (format === 'pdf') {
       return {
-        buffer: buildPdf(built.pdf),
+        buffer: buildPremiumPdf(built.doc),
         mime: 'application/pdf',
         filename: `NDJO-${kind}-${date}.pdf`,
       };
@@ -64,8 +63,36 @@ export class ExportService {
     throw new BadRequestException('Extraction inconnue');
   }
 
-  private header(title: string, site: string, extra: string[] = []) {
-    return [...companyPdfLines(), '', title, `Etablissement : ${site}`, `Date : ${stamp()}`, ...extra, ''];
+  private doc(
+    title: string,
+    site: string,
+    tables: PdfTable[],
+    extra?: Partial<PdfDocument>,
+  ): PdfDocument {
+    return { title, site, tables, ...extra };
+  }
+
+  private moneyTable(
+    title: string,
+    headers: string[],
+    rows: unknown[][],
+    totals?: unknown[],
+    rightFrom = 1,
+  ): PdfTable {
+    const widths = headers.map((header, index) => {
+      if (index === 0) return 180;
+      return Math.max(70, Math.floor((523 - 180) / Math.max(1, headers.length - 1)));
+    });
+    return {
+      title,
+      columns: headers.map((header, index) => ({
+        header,
+        width: widths[index],
+        align: index >= rightFrom ? 'right' : 'left',
+      })),
+      rows,
+      totals,
+    };
   }
 
   private async stock(params: { establishmentId?: string; site: string }) {
@@ -120,15 +147,45 @@ export class ExportService {
         rows: lotRows,
       },
     ];
-    const pdf = [
-      ...this.header('Extraction stock', params.site),
-      'PRODUITS',
-      ...productRows.map((row) => row.join(' | ')),
-      '',
-      'LOTS',
-      ...lotRows.map((row) => row.join(' | ')),
-    ];
-    return { sheets, pdf };
+    return {
+      sheets,
+      doc: this.doc('Etat du stock', params.site, [
+        {
+          title: 'Niveaux par produit',
+          columns: [
+            { header: 'Code', width: 60 },
+            { header: 'Produit', width: 140 },
+            { header: 'Categorie', width: 90 },
+            { header: 'Qte', width: 50, align: 'right' },
+            { header: 'Unite', width: 45 },
+            { header: 'Valeur', width: 80, align: 'right' },
+            { header: 'Etat', width: 50 },
+          ],
+          rows: productRows.map((row) => [row[0], row[1], row[2], row[4], row[5], fcPdf(row[6]), row[8]]),
+        },
+        {
+          title: 'Lots FEFO',
+          columns: [
+            { header: 'Lot', width: 90 },
+            { header: 'Produit', width: 140 },
+            { header: 'Qte', width: 50, align: 'right' },
+            { header: 'Achat', width: 70, align: 'right' },
+            { header: 'Entree', width: 70 },
+            { header: 'Peremption', width: 70 },
+            { header: 'Emplacement', width: 80 },
+          ],
+          rows: lots.map((lot) => [
+            lot.number,
+            lot.product.name,
+            lot.qtyCurrent,
+            fcPdf(lot.priceBuy),
+            day(lot.entryDate),
+            day(lot.expiryDate),
+            lot.location,
+          ]),
+        },
+      ]),
+    };
   }
 
   private async catalog(params: { establishmentId?: string; site: string }) {
@@ -164,11 +221,32 @@ export class ExportService {
         rows,
       },
     ];
-    const pdf = [
-      ...this.header('Extraction catalogue', params.site),
-      ...rows.map((row) => `${row[0]} | ${row[1]} | ${row[2]} | ${row[4]} | achat ${row[8]} | vente ${row[9]} | ${row[11]}`),
-    ];
-    return { sheets, pdf };
+    return {
+      sheets,
+      doc: this.doc('Catalogue produits', params.site, [
+        {
+          title: 'Fiches catalogue',
+          columns: [
+            { header: 'Code', width: 70 },
+            { header: 'Nom', width: 130 },
+            { header: 'Categorie', width: 80 },
+            { header: 'Type', width: 60 },
+            { header: 'Achat', width: 70, align: 'right' },
+            { header: 'Vente', width: 70, align: 'right' },
+            { header: 'Statut', width: 50 },
+          ],
+          rows: products.map((product) => [
+            product.code,
+            product.name,
+            product.category.name,
+            product.kind,
+            fcPdf(product.priceBuy),
+            fcPdf(product.priceSell),
+            product.status,
+          ]),
+        },
+      ]),
+    };
   }
 
   private async sales(params: {
@@ -224,16 +302,46 @@ export class ExportService {
         rows: lineRows,
       },
     ];
-    const pdf = [
-      ...this.header('Extraction ventes', params.site, [
-        `Periode : ${period}`,
-        `Du ${day(from)} au ${day(to)}`,
-        `Commandes : ${orders.length}`,
-        `Total : ${orders.reduce((sum, order) => sum + order.total, 0)} FC`,
-      ]),
-      ...orderRows.map((row) => `${row[0]} | ${row[1]} | ${row[3]} | ${row[4]} | ${row[5]} | ${row[7]} FC`),
-    ];
-    return { sheets, pdf };
+    const total = orders.reduce((sum, order) => sum + order.total, 0);
+    return {
+      sheets,
+      doc: this.doc(
+        'Journal des ventes',
+        params.site,
+        [
+          {
+            title: 'Commandes',
+            columns: [
+              { header: 'No', width: 90 },
+              { header: 'Date', width: 70 },
+              { header: 'Type', width: 70 },
+              { header: 'Statut', width: 70 },
+              { header: 'Paiement', width: 70 },
+              { header: 'Client', width: 80 },
+              { header: 'Total', width: 70, align: 'right' },
+            ],
+            rows: orders.map((order) => [
+              order.number,
+              day(order.createdAt),
+              order.type,
+              order.status,
+              order.paymentStatus,
+              order.customerName ?? '',
+              fcPdf(order.total),
+            ]),
+            totals: ['TOTAL', '', '', '', '', `${orders.length} cmd`, fcPdf(total)],
+          },
+        ],
+        {
+          period,
+          range: `${day(from)} → ${day(to)}`,
+          kpis: [
+            { label: 'Commandes', value: String(orders.length) },
+            { label: 'Chiffre d affaires', value: fcPdf(total), highlight: true },
+          ],
+        },
+      ),
+    };
   }
 
   private async report(params: {
@@ -276,24 +384,77 @@ export class ExportService {
         rows: sales.byDay.map((row) => [row.date, row.total]),
       },
     ];
-    const pdf = [
-      ...this.header('Rapport NDJO TACOS', params.site, [
-        `Periode : ${data.period}`,
-        `Du ${day(data.from)} au ${day(data.to)}`,
-        `CA : ${finance.revenue} FC`,
-        `Depense produits : ${finance.productExpense} FC`,
-        `Total benefice : ${finance.profit} FC`,
-      ]),
-      'PAR PRODUIT',
-      ...sales.byProduct.map(
-        (row) => `${row.name} | qte ${row.qty} | CA ${row.revenue} | depense ${row.expense} | benefice ${row.profit}`,
+    const byProductRows = sales.byProduct.map((row) => [
+      row.name,
+      row.qty,
+      fcPdf(row.revenue),
+      fcPdf(row.expense),
+      fcPdf(row.profit),
+    ]);
+    const byCategoryRows = sales.byCategory.map((row) => [
+      row.name,
+      fcPdf(row.revenue),
+      fcPdf(row.expense),
+      fcPdf(row.profit),
+    ]);
+    return {
+      sheets,
+      doc: this.doc(
+        'Rapport d activite',
+        params.site,
+        [
+          {
+            title: 'Synthese financiere',
+            columns: [
+              { header: 'Indicateur', width: 320 },
+              { header: 'Montant', width: 200, align: 'right' },
+            ],
+            rows: [
+              ['Chiffre d affaires ventes', fcPdf(finance.revenue)],
+              ['CA encaisse', fcPdf(finance.paidRevenue)],
+              ['Depense produits vendus', fcPdf(finance.productExpense)],
+              ['Pertes valorisees', fcPdf(finance.lossValue)],
+            ],
+            totals: ['Total benefice', fcPdf(finance.profit)],
+          },
+          this.moneyTable(
+            'Ventes par produit',
+            ['Produit', 'Qte', 'CA', 'Depense', 'Benefice'],
+            byProductRows,
+            ['TOTAL', '', fcPdf(sales.byProduct.reduce((sum, row) => sum + row.revenue, 0)), fcPdf(sales.byProduct.reduce((sum, row) => sum + (row.expense ?? 0), 0)), fcPdf(sales.profit)],
+            1,
+          ),
+          this.moneyTable(
+            'Ventes par categorie',
+            ['Categorie', 'CA', 'Depense', 'Benefice'],
+            byCategoryRows,
+            undefined,
+            1,
+          ),
+          {
+            title: 'Ventes par jour',
+            columns: [
+              { header: 'Date', width: 200 },
+              { header: 'Chiffre d affaires', width: 320, align: 'right' },
+            ],
+            rows: sales.byDay.map((row) => [row.date, fcPdf(row.total)]),
+          },
+        ],
+        {
+          period: data.period,
+          range: `${day(data.from)} → ${day(data.to)}`,
+          kpis: [
+            { label: 'Commandes', value: String(sales.orders) },
+            { label: 'CA ventes', value: fcPdf(finance.revenue) },
+            { label: 'Depense produits', value: fcPdf(finance.productExpense) },
+            { label: 'Total benefice', value: fcPdf(finance.profit), highlight: true },
+          ],
+          notes: [
+            'Le prix de vente catalogue ne change pas. La depense et le benefice suivent le prix d achat de chaque lot sorti (FEFO).',
+            'Document genere pour l etablissement selectionne. Usage interne IPIP SARLU / NDJO TACOS.',
+          ],
+        },
       ),
-      '',
-      'PAR CATEGORIE',
-      ...sales.byCategory.map(
-        (row) => `${row.name} | CA ${row.revenue} | depense ${row.expense} | benefice ${row.profit}`,
-      ),
-    ];
-    return { sheets, pdf };
+    };
   }
 }
