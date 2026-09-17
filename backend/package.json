@@ -5,6 +5,7 @@
   "scripts": {
     "start": "nest start",
     "start:prod": "node dist/src/main.js",
+    "start:railway": "node scripts/railway-start.cjs",
     "start:dev": "nest start --watch",
     "build": "prisma generate && nest build",
     "prisma:generate": "prisma generate",
