@@ -778,6 +778,7 @@ class _PosPageState extends State<PosPage> {
   String? error;
   bool loading = true;
   Timer? _poll;
+  String? _siteId;
 
   String get _id => widget.session.establishmentId ?? '';
 
@@ -815,14 +816,25 @@ class _PosPageState extends State<PosPage> {
       zones = sync?.store.readList('zones-$_id') ?? [];
     } catch (_) {}
     loading = false;
+    _siteId = widget.session.establishmentId;
+    widget.session.addListener(_onSite);
     _load();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) _load();
     });
   }
 
+  void _onSite() {
+    final next = widget.session.establishmentId;
+    if (next == _siteId) return;
+    _siteId = next;
+    cart.clear();
+    _load();
+  }
+
   @override
   void dispose() {
+    widget.session.removeListener(_onSite);
     _poll?.cancel();
     super.dispose();
   }
@@ -975,6 +987,13 @@ class _PosPageState extends State<PosPage> {
       ),
     );
     if (ok != true) return;
+    if (_id.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choisissez un établissement (pas « Tous ») avant de vendre.')),
+      );
+      return;
+    }
     try {
     final payload = {
       'establishmentId': _id,

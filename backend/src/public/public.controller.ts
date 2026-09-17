@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { PrismaService } from '../prisma.service';
 import { OrdersService } from '../orders/orders.service';
+import { SiteProvisionService } from '../organization/site-provision.service';
 
 @Controller('public')
 @Throttle({ default: { ttl: 60000, limit: 40 } })
@@ -9,6 +10,7 @@ export class PublicController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orders: OrdersService,
+    private readonly sites: SiteProvisionService,
   ) {}
 
   @Get('establishments')
@@ -21,6 +23,7 @@ export class PublicController {
 
   @Get('catalog')
   async catalog(@Query('establishmentId') establishmentId: string) {
+    await this.sites.ensureReady(establishmentId);
     const categories = await this.prisma.category.findMany({
       where: { establishmentId },
       include: {

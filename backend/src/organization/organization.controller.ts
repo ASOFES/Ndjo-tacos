@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { SiteProvisionService } from '../organization/site-provision.service';
 import { JwtGuard } from '../auth/jwt.guard';
 import { AccessGuard } from '../auth/access.guard';
 import { RequirePermission } from '../auth/require-permission.decorator';
@@ -17,7 +18,10 @@ import { RequirePermission } from '../auth/require-permission.decorator';
 @Controller()
 @UseGuards(JwtGuard, AccessGuard)
 export class OrganizationController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sites: SiteProvisionService,
+  ) {}
 
   @Post('establishments')
   @RequirePermission('admin.ecrire')
@@ -151,6 +155,9 @@ export class OrganizationController {
     const establishment = body.id
       ? await this.prisma.establishment.update({ where: { id: body.id }, data })
       : await this.prisma.establishment.create({ data });
+    if (action === 'CREER') {
+      await this.sites.ensureReady(establishment.id);
+    }
     await this.audit(userId, action, 'ETABLISSEMENT', establishment.name);
     return establishment;
   }

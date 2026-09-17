@@ -16,6 +16,7 @@ import { AccessGuard } from '../auth/access.guard';
 import { RequirePermission } from '../auth/require-permission.decorator';
 import { assertSameEstablishment, AuthedRequest, mustExist } from '../auth/scope';
 import { CatalogService, toProductDraft } from './catalog.service';
+import { SiteProvisionService } from '../organization/site-provision.service';
 
 @Controller('catalog')
 @UseGuards(JwtGuard, AccessGuard)
@@ -23,11 +24,13 @@ export class CatalogController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalog: CatalogService,
+    private readonly sites: SiteProvisionService,
   ) {}
 
   @Get('categories')
   @RequirePermission('catalogue.voir')
-  categories(@Query('establishmentId') establishmentId: string) {
+  async categories(@Query('establishmentId') establishmentId: string) {
+    await this.sites.ensureReady(establishmentId);
     return this.prisma.category.findMany({
       where: { establishmentId },
       orderBy: { name: 'asc' },
@@ -51,10 +54,11 @@ export class CatalogController {
 
   @Get('products')
   @RequirePermission('catalogue.voir', 'ventes.voir')
-  products(
+  async products(
     @Query('establishmentId') establishmentId: string,
     @Query('kind') kind?: string,
   ) {
+    await this.sites.ensureReady(establishmentId);
     return this.catalog.list(establishmentId, kind);
   }
 

@@ -44,6 +44,7 @@ import { PurchasesService } from './purchases/purchases.service';
 import { PermissionsController } from './auth/permissions.controller';
 import { PermissionService } from './auth/permission.service';
 import { SyncPushService } from './sync/sync.service';
+import { SiteProvisionService } from './organization/site-provision.service';
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { SyncPushService } from './sync/sync.service';
     ReportsService,
     PurchasesService,
     SyncPushService,
+    SiteProvisionService,
   ],
 })
 export class AppModule {}

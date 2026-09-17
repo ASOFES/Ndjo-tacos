@@ -61,6 +61,9 @@ export class OrdersService {
       if (existing) return existing;
     }
     const items = body.items ?? [];
+    if (!String(body.establishmentId ?? '').trim()) {
+      throw new BadRequestException('Choisissez un établissement');
+    }
     if (!items.length) throw new BadRequestException('Panier vide');
 
     if (body.customerName && body.customerPhone) {

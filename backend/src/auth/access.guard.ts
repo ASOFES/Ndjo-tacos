@@ -27,8 +27,9 @@ export class AccessGuard implements CanActivate {
       request.query?.establishmentId ||
       request.body?.establishmentId ||
       request.body?.sourceId;
+    const canSwitch = ['SUPER_ADMIN', 'ADMIN', 'GESTIONNAIRE'].includes(user.role);
 
-    if (user.role !== 'SUPER_ADMIN' && user.establishmentId) {
+    if (!canSwitch && user.establishmentId) {
       if (requested && requested !== user.establishmentId) {
         throw new ForbiddenException('Accès refusé à cet établissement');
       }
@@ -39,10 +40,9 @@ export class AccessGuard implements CanActivate {
     }
 
     request.permissions = await this.permissions.keysFor(user.role);
-    request.scopedEstablishmentId =
-      user.role === 'SUPER_ADMIN'
-        ? requested || undefined
-        : user.establishmentId;
+    request.scopedEstablishmentId = canSwitch
+      ? requested || user.establishmentId
+      : user.establishmentId;
 
     const needed = this.reflector.getAllAndOverride<string[]>(PERMISSION_KEY, [
       context.getHandler(),
