@@ -22,8 +22,19 @@ async function bootstrap() {
       crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
   );
+  const http = app.getHttpAdapter().getInstance();
+  const port = Number(process.env.PORT ?? 3000);
+  const appPort = Number(process.env.WEB_PORT ?? 5192);
+  http.get('/health', (_req: unknown, res: { json: (body: unknown) => void }) => {
+    res.json({ ok: true, service: 'ndjo-tacos-api' });
+  });
+  http.get('/lan', (_req: unknown, res: { json: (body: unknown) => void }) => {
+    res.json(lanInfo(port, appPort));
+  });
   if (production) {
-    app.use((req: { secure?: boolean; headers: Record<string, unknown> }, res: { status: (n: number) => { json: (v: unknown) => void } }, next: () => void) => {
+    app.use((req: { url?: string; secure?: boolean; headers: Record<string, unknown> }, res: { status: (n: number) => { json: (v: unknown) => void } }, next: () => void) => {
+      const path = String(req.url ?? '').split('?')[0];
+      if (path === '/health' || path === '/lan') return next();
       const proto = String(req.headers['x-forwarded-proto'] ?? '');
       if (req.secure || proto === 'https') return next();
       return res.status(400).json({ message: 'HTTPS obligatoire en production' });
@@ -49,15 +60,6 @@ async function bootstrap() {
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-  });
-  const http = app.getHttpAdapter().getInstance();
-  const port = Number(process.env.PORT ?? 3000);
-  const appPort = Number(process.env.WEB_PORT ?? 5192);
-  http.get('/health', (_req: unknown, res: { json: (body: unknown) => void }) => {
-    res.json({ ok: true, service: 'ndjo-tacos-api' });
-  });
-  http.get('/lan', (_req: unknown, res: { json: (body: unknown) => void }) => {
-    res.json(lanInfo(port, appPort));
   });
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
   await app.listen(port, '0.0.0.0');
