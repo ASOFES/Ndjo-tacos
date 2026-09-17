@@ -54,6 +54,7 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
   Timer? _poll;
   bool _primed = false;
   OrderAlert? _alert;
+  String? _site;
 
   String get _id => widget.session.establishmentId ?? '';
 
@@ -61,15 +62,26 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
   void initState() {
     super.initState();
     NdjoOrderRing.unlock();
+    widget.session.addListener(_onSession);
     if (!widget.kitchen && !widget.cashier && !widget.driver) return;
     _tick();
-    _poll = Timer.periodic(const Duration(seconds: 4), (_) {
+    _poll = Timer.periodic(const Duration(seconds: 3), (_) {
       if (mounted) _tick();
     });
   }
 
+  void _onSession() {
+    final next = _id;
+    if (next == _site) return;
+    _site = next;
+    _primed = false;
+    _seen.clear();
+    if (mounted) _tick();
+  }
+
   @override
   void dispose() {
+    widget.session.removeListener(_onSession);
     _poll?.cancel();
     NdjoOrderRing.stop();
     super.dispose();
@@ -103,28 +115,53 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
     }
   }
 
+  Future<List<dynamic>> _safeList(String path) async {
+    try {
+      return await widget.session.api.getList(path);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<void> _tick() async {
     if (_id.isEmpty) return;
+    if (_site != _id) {
+      _site = _id;
+      _primed = false;
+      _seen.clear();
+    }
     try {
       final byId = <String, Map<String, dynamic>>{};
-      if (widget.cashier) {
-        _ingest(await widget.session.api.getList('/orders?establishmentId=$_id'), byId);
-      }
+      final fetches = <Future<void>>[];
       if (widget.kitchen) {
-        _ingest(await widget.session.api.getList('/orders?establishmentId=$_id&kitchen=1'), byId);
+        fetches.add(_safeList('/orders?establishmentId=$_id&kitchen=1').then((list) => _ingest(list, byId)));
+      }
+      if (widget.cashier) {
+        fetches.add(_safeList('/orders?establishmentId=$_id').then((list) => _ingest(list, byId)));
       }
       if (widget.driver) {
-        _ingest(await widget.session.api.getList('/delivery?establishmentId=$_id'), byId);
+        fetches.add(_safeList('/delivery?establishmentId=$_id').then((list) => _ingest(list, byId)));
+      }
+      await Future.wait(fetches);
+      if (widget.cashier) {
+        _ingest(await _safeList('/orders?establishmentId=$_id&inbox=1'), byId);
       }
       if (!mounted) return;
       final orders = byId.values.toList();
       if (!_primed) {
+        OrderAlert? waiting;
+        for (final order in orders) {
+          if (widget.cashier && order['status']?.toString() == 'EN_CAISSE') {
+            waiting = _cashierAlert(order, previous: null);
+          }
+        }
         for (final order in orders) {
           final id = order['id']?.toString();
           if (id == null) continue;
           _seen[id] = _fingerprint(order);
         }
         _primed = true;
+        if (waiting != null) _raise(waiting);
         return;
       }
       OrderAlert? next;
@@ -139,6 +176,28 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
       }
       if (next != null) _raise(next);
     } catch (_) {}
+  }
+
+  OrderAlert _cashierAlert(Map<String, dynamic> order, {required String? previous}) {
+    final shortage = orderShortageMessage(order);
+    final who = order['customerName']?.toString() ?? order['user']?['name']?.toString() ?? '';
+    final items = orderItemsLine(order);
+    final detail = [
+      if (shortage.isNotEmpty) shortage,
+      if (who.isNotEmpty) who,
+      if (items.isNotEmpty) items,
+    ].join('\n');
+    return OrderAlert(
+      orderId: order['id'].toString(),
+      title: shortage.isNotEmpty
+          ? 'Produit en carence'
+          : previous == null
+              ? 'Nouvelle commande caisse'
+              : 'Mise à jour commande',
+      number: order['number']?.toString() ?? '',
+      detail: detail,
+      kind: 'cashier',
+    );
   }
 
   OrderAlert? _match(Map<String, dynamic> order) {
@@ -197,18 +256,7 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
     }
 
     if (widget.cashier && status == 'EN_CAISSE') {
-      final shortage = orderShortageMessage(order);
-      return OrderAlert(
-        orderId: id,
-        title: shortage.isNotEmpty
-            ? 'Produit en carence'
-            : previous == null
-                ? 'Nouvelle commande'
-                : 'Mise à jour commande',
-        number: number,
-        detail: shortage.isNotEmpty ? '$shortage\n$detail'.trim() : detail,
-        kind: 'cashier',
-      );
+      return _cashierAlert(order, previous: previous);
     }
 
     if (widget.cashier && status == 'PRETE' && (was == 'NOUVELLE' || was == 'EN_PREPARATION')) {
@@ -235,6 +283,7 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
   }
 
   void _raise(OrderAlert alert) {
+    NdjoOrderRing.unlock();
     NdjoOrderRing.start();
     setState(() => _alert = alert);
   }

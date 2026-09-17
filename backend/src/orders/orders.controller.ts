@@ -35,21 +35,32 @@ export class OrdersController {
   async list(
     @Query('establishmentId') establishmentId: string,
     @Query('kitchen') kitchen?: string,
+    @Query('inbox') inbox?: string,
   ) {
+    const include = {
+      items: true,
+      payments: true,
+      invoice: true,
+      driver: { select: { name: true, phone: true } },
+      user: { select: { name: true } },
+      customer: { select: { id: true, name: true, phone: true } },
+      deliveryZone: true,
+    };
+    if (inbox === '1') {
+      const waiting = await this.prisma.order.findMany({
+        where: { establishmentId, status: 'EN_CAISSE' },
+        include,
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
+      return this.orders.withCashierStock(waiting, establishmentId);
+    }
     const orders = await this.prisma.order.findMany({
       where:
         kitchen === '1'
           ? kitchenBoardWhere(establishmentId)
           : { establishmentId },
-      include: {
-        items: true,
-        payments: true,
-        invoice: true,
-        driver: { select: { name: true, phone: true } },
-        user: { select: { name: true } },
-        customer: { select: { id: true, name: true, phone: true } },
-        deliveryZone: true,
-      },
+      include,
       orderBy: kitchen === '1' ? { updatedAt: 'desc' } : { createdAt: 'desc' },
       take: kitchen === '1' ? 200 : 80,
     });

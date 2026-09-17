@@ -394,7 +394,7 @@ class _AdminShellState extends State<AdminShell> {
       kitchen: true,
       cashier: true,
       onOpenKitchen: () => setState(() => index = 14),
-      onOpenCashier: () => setState(() => index = 13),
+      onOpenCashier: () => setState(() => index = 12),
       onOpenDriver: () => setState(() => index = 15),
       child: Scaffold(
       appBar: AppBar(
@@ -503,7 +503,10 @@ class _RoleShellState extends State<RoleShell> {
       cashier: widget.cashierAlerts,
       driver: widget.driverAlerts,
       onOpenKitchen: () => setState(() => index = _pageIndex('Cuisine')),
-      onOpenCashier: () => setState(() => index = _pageIndex('Commandes')),
+      onOpenCashier: () {
+        final i = widget.pages.indexWhere((item) => item.$2 == 'Caisse');
+        setState(() => index = i >= 0 ? i : _pageIndex('Commandes'));
+      },
       onOpenDriver: () => setState(() => index = _pageIndex('Livraisons')),
       child: Scaffold(
       appBar: AppBar(

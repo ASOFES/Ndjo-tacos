@@ -1002,22 +1002,37 @@ class _PosPageState extends State<PosPage> {
       final loadedOrders = sync != null
           ? await sync.cachedOrFetch('/orders?establishmentId=$_id', 'orders-$_id')
           : await widget.session.api.getList('/orders?establishmentId=$_id');
+      List<dynamic> inbox = [];
+      try {
+        inbox = await widget.session.api.getList('/orders?establishmentId=$_id&inbox=1');
+      } catch (_) {}
+      final pending = sync?.pendingSales() ?? localSales;
+      final pendingIds = pending.map((item) => item['clientUuid']?.toString()).toSet();
+      final inboxIds = {
+        for (final item in inbox)
+          if (item is Map) item['id']?.toString(),
+      }.whereType<String>().toSet();
+      final merged = [
+        ...pending,
+        ...inbox.where((item) {
+          if (item is! Map) return false;
+          return !pendingIds.contains(item['clientUuid']?.toString()) &&
+              !pendingIds.contains(item['id']?.toString());
+        }),
+        ...loadedOrders.where((item) {
+          final map = item as Map;
+          final id = map['id']?.toString();
+          return !pendingIds.contains(map['clientUuid']?.toString()) &&
+              !pendingIds.contains(id) &&
+              !inboxIds.contains(id);
+        }),
+      ];
       final loadedCustomers = sync != null
           ? await sync.cachedOrFetch('/customers?establishmentId=$_id', 'customers-$_id')
           : await widget.session.api.getList('/customers?establishmentId=$_id');
       final loadedZones = sync != null
           ? await sync.cachedOrFetch('/delivery-zones?establishmentId=$_id', 'zones-$_id')
           : await widget.session.api.getList('/delivery-zones?establishmentId=$_id');
-      final pending = sync?.pendingSales() ?? localSales;
-      final pendingIds = pending.map((item) => item['clientUuid']?.toString()).toSet();
-      final merged = [
-        ...pending,
-        ...loadedOrders.where((item) {
-          final map = item as Map;
-          return !pendingIds.contains(map['clientUuid']?.toString()) &&
-              !pendingIds.contains(map['id']?.toString());
-        }),
-      ];
       if (!mounted) return;
       setState(() {
         products = loadedProducts.isNotEmpty ? loadedProducts : products;

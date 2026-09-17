@@ -86,11 +86,27 @@
         } catch (e) {}
       }
       function start() {
-        unlock().then(function (ok) {
-          if (!ok) return;
+        function go() {
           if (timer) clearInterval(timer);
           ringOnce();
-          timer = setInterval(ringOnce, 1300);
+          timer = setInterval(ringOnce, 1100);
+        }
+        unlock().then(function (ok) {
+          if (ok) {
+            go();
+            return;
+          }
+          var n = 0;
+          var retry = setInterval(function () {
+            n += 1;
+            unlock().then(function (ok2) {
+              if (ok2) {
+                clearInterval(retry);
+                go();
+              }
+            });
+            if (n > 25) clearInterval(retry);
+          }, 400);
         });
       }
       function stop() {

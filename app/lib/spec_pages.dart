@@ -275,16 +275,31 @@ class _OrdersPageState extends State<OrdersPage> {
   Future<void> _load() async {
     try {
       final list = await widget.session.cachedList('/orders?establishmentId=$_id', 'orders-$_id');
+      List<dynamic> inbox = [];
+      try {
+        inbox = await widget.session.api.getList('/orders?establishmentId=$_id&inbox=1');
+      } catch (_) {}
       final pending = widget.session.sync?.pendingSales() ?? [];
       final pendingIds = pending.map((item) => item['clientUuid']?.toString()).toSet();
+      final inboxIds = {
+        for (final item in inbox)
+          if (item is Map) item['id']?.toString(),
+      }.whereType<String>().toSet();
       if (!mounted) return;
       setState(() {
         orders = [
           ...pending,
+          ...inbox.where((item) {
+            if (item is! Map) return false;
+            return !pendingIds.contains(item['clientUuid']?.toString()) &&
+                !pendingIds.contains(item['id']?.toString());
+          }),
           ...list.where((item) {
             final map = item as Map;
+            final id = map['id']?.toString();
             return !pendingIds.contains(map['clientUuid']?.toString()) &&
-                !pendingIds.contains(map['id']?.toString());
+                !pendingIds.contains(id) &&
+                !inboxIds.contains(id);
           }),
         ];
       });
