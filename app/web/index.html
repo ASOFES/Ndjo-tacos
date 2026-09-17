@@ -45,6 +45,67 @@
         try { localStorage.setItem('ndjo_sync_queue', value); } catch (e) {}
       }
     };
+    window.ndjoRing = (function () {
+      var ctx = null;
+      var timer = null;
+      var unlocked = false;
+      function unlock() {
+        try {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return Promise.resolve(false);
+          ctx = ctx || new AC();
+          return ctx.resume().then(function () {
+            unlocked = ctx.state === 'running';
+            return unlocked;
+          }).catch(function () { return false; });
+        } catch (e) {
+          return Promise.resolve(false);
+        }
+      }
+      function ringOnce() {
+        if (!ctx || ctx.state !== 'running') return;
+        try {
+          var osc1 = ctx.createOscillator();
+          var osc2 = ctx.createOscillator();
+          var gain = ctx.createGain();
+          gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.55, ctx.currentTime + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.9);
+          osc1.type = 'sine';
+          osc2.type = 'sine';
+          osc1.frequency.setValueAtTime(880, ctx.currentTime);
+          osc2.frequency.setValueAtTime(660, ctx.currentTime);
+          osc1.connect(gain);
+          osc2.connect(gain);
+          gain.connect(ctx.destination);
+          osc1.start();
+          osc2.start();
+          osc1.stop(ctx.currentTime + 0.95);
+          osc2.stop(ctx.currentTime + 0.95);
+          if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 300]);
+        } catch (e) {}
+      }
+      function start() {
+        unlock().then(function (ok) {
+          if (!ok) return;
+          if (timer) clearInterval(timer);
+          ringOnce();
+          timer = setInterval(ringOnce, 1300);
+        });
+      }
+      function stop() {
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      }
+      window.addEventListener('pointerdown', unlock, { once: true });
+      window.addEventListener('keydown', unlock, { once: true });
+      window.addEventListener('ndjo-ring-unlock', function () { unlock(); });
+      window.addEventListener('ndjo-ring-start', function () { start(); });
+      window.addEventListener('ndjo-ring-stop', function () { stop(); });
+      return { unlock: unlock, start: start, stop: stop };
+    })();
   </script>
   <script>
     if ('serviceWorker' in navigator) {

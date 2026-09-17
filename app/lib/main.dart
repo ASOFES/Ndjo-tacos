@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import 'api.dart';
+import 'order_alert.dart';
+import 'order_ring.dart';
 import 'offline/local_store.dart';
 import 'offline/sync_service.dart';
 import 'catalog_page.dart';
@@ -108,7 +110,7 @@ class _Home extends StatelessWidget {
     }
     switch (session.role) {
       case 'CAISSIER':
-        return RoleShell(session: session, title: 'Caisse', pages: [
+        return RoleShell(session: session, title: 'Caisse', cashierAlerts: true, pages: [
           (Icons.point_of_sale, 'Caisse', PosPage(session: session)),
           (Icons.receipt_long, 'Commandes', OrdersPage(session: session)),
           (Icons.people_outline, 'Clients', CustomersPage(session: session)),
@@ -121,7 +123,7 @@ class _Home extends StatelessWidget {
           (Icons.local_shipping_outlined, 'Achats', PurchasesPage(session: session)),
         ]);
       case 'CUISINIER':
-        return RoleShell(session: session, title: 'Cuisine', pages: [
+        return RoleShell(session: session, title: 'Cuisine', kitchenAlerts: true, pages: [
           (Icons.soup_kitchen_outlined, 'Cuisine', KitchenPage(session: session)),
         ]);
       case 'LIVREUR':
@@ -207,6 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
       loading = true;
       error = null;
     });
+    NdjoOrderRing.unlock();
     try {
       if (!_publicSite) {
         await Api.setBase(server.text);
@@ -386,7 +389,13 @@ class _AdminShellState extends State<AdminShell> {
               );
     }
 
-    return Scaffold(
+    return OrderAlertHost(
+      session: widget.session,
+      kitchen: true,
+      cashier: true,
+      onOpenKitchen: () => setState(() => index = 14),
+      onOpenCashier: () => setState(() => index = 13),
+      child: Scaffold(
       appBar: AppBar(
         title: Text(compact ? items[index].$2 : 'NDJO TACOS'),
         actions: [
@@ -450,15 +459,25 @@ class _AdminShellState extends State<AdminShell> {
           Expanded(child: pages[index]),
         ],
       ),
+    ),
     );
   }
 }
 
 class RoleShell extends StatefulWidget {
-  const RoleShell({super.key, required this.session, required this.title, required this.pages});
+  const RoleShell({
+    super.key,
+    required this.session,
+    required this.title,
+    required this.pages,
+    this.kitchenAlerts = false,
+    this.cashierAlerts = false,
+  });
   final Session session;
   final String title;
   final List<(IconData, String, Widget)> pages;
+  final bool kitchenAlerts;
+  final bool cashierAlerts;
 
   @override
   State<RoleShell> createState() => _RoleShellState();
@@ -467,10 +486,21 @@ class RoleShell extends StatefulWidget {
 class _RoleShellState extends State<RoleShell> {
   int index = 0;
 
+  int _pageIndex(String label) {
+    final i = widget.pages.indexWhere((item) => item.$2 == label);
+    return i >= 0 ? i : 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final compact = ndjoCompact(context);
-    return Scaffold(
+    return OrderAlertHost(
+      session: widget.session,
+      kitchen: widget.kitchenAlerts,
+      cashier: widget.cashierAlerts,
+      onOpenKitchen: () => setState(() => index = _pageIndex('Cuisine')),
+      onOpenCashier: () => setState(() => index = _pageIndex('Commandes')),
+      child: Scaffold(
       appBar: AppBar(
         title: Text('${widget.title} — NDJO TACOS'),
         actions: [IconButton(onPressed: widget.session.logout, icon: const Icon(Icons.logout))],
@@ -500,6 +530,7 @@ class _RoleShellState extends State<RoleShell> {
                   .toList(),
             )
           : null,
+    ),
     );
   }
 }
