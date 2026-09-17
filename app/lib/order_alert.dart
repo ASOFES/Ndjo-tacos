@@ -13,14 +13,14 @@ class OrderAlert {
     required this.title,
     required this.number,
     required this.detail,
-    required this.kitchen,
+    required this.kind,
   });
 
   final String orderId;
   final String title;
   final String number;
   final String detail;
-  final bool kitchen;
+  final String kind;
 }
 
 class OrderAlertHost extends StatefulWidget {
@@ -30,16 +30,20 @@ class OrderAlertHost extends StatefulWidget {
     required this.child,
     this.kitchen = false,
     this.cashier = false,
+    this.driver = false,
     this.onOpenKitchen,
     this.onOpenCashier,
+    this.onOpenDriver,
   });
 
   final Session session;
   final Widget child;
   final bool kitchen;
   final bool cashier;
+  final bool driver;
   final VoidCallback? onOpenKitchen;
   final VoidCallback? onOpenCashier;
+  final VoidCallback? onOpenDriver;
 
   @override
   State<OrderAlertHost> createState() => _OrderAlertHostState();
@@ -57,7 +61,7 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
   void initState() {
     super.initState();
     NdjoOrderRing.unlock();
-    if (!widget.kitchen && !widget.cashier) return;
+    if (!widget.kitchen && !widget.cashier && !widget.driver) return;
     _tick();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) _tick();
@@ -81,9 +85,10 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
     return [
       order['id'],
       order['status'],
-      order['updatedAt'],
       order['total'],
       foods.length,
+      order['driverId'] ?? '',
+      order['address'] ?? '',
       lines,
     ].join('#');
   }
@@ -91,12 +96,28 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
   Future<void> _tick() async {
     if (_id.isEmpty) return;
     try {
-      final list = await widget.session.api.getList('/orders?establishmentId=$_id');
+      final byId = <String, Map<String, dynamic>>{};
+      if (widget.kitchen || widget.cashier) {
+        final list = await widget.session.api.getList('/orders?establishmentId=$_id');
+        for (final item in list) {
+          if (item is! Map) continue;
+          final map = Map<String, dynamic>.from(item);
+          final id = map['id']?.toString();
+          if (id != null) byId[id] = map;
+        }
+      }
+      if (widget.driver) {
+        final list = await widget.session.api.getList('/delivery?establishmentId=$_id');
+        for (final item in list) {
+          if (item is! Map) continue;
+          final map = Map<String, dynamic>.from(item);
+          final id = map['id']?.toString();
+          if (id == null) continue;
+          byId[id] = {...?byId[id], ...map};
+        }
+      }
       if (!mounted) return;
-      final orders = [
-        for (final item in list)
-          if (item is Map) Map<String, dynamic>.from(item),
-      ];
+      final orders = byId.values.toList();
       if (!_primed) {
         for (final order in orders) {
           final id = order['id']?.toString();
@@ -131,13 +152,38 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
     if (!changed) return null;
     final previousParts = previous?.split('#') ?? const <String>[];
     final was = previousParts.length > 1 ? previousParts[1] : '';
+    final wasDriver = previousParts.length > 5 ? previousParts[5] : '';
     final number = order['number']?.toString() ?? '';
     final who = order['customerName']?.toString() ?? order['user']?['name']?.toString() ?? '';
+    final address = order['address']?.toString() ?? '';
     final items = orderItemsLine(order);
+    final me = widget.session.user?['id']?.toString();
+    final driverId = order['driverId']?.toString() ?? '';
     final detail = [
       if (who.isNotEmpty) who,
+      if (address.isNotEmpty) address,
       if (items.isNotEmpty) items,
     ].join('\n');
+
+    if (widget.driver && me != null && driverId == me) {
+      final assignedNow = wasDriver != me;
+      if (assignedNow || previous == null) {
+        return OrderAlert(
+          orderId: id,
+          title: 'Course assignée',
+          number: number,
+          detail: detail,
+          kind: 'driver',
+        );
+      }
+      return OrderAlert(
+        orderId: id,
+        title: 'Mise à jour livraison',
+        number: number,
+        detail: detail,
+        kind: 'driver',
+      );
+    }
 
     if (widget.kitchen && (status == 'NOUVELLE' || status == 'EN_PREPARATION')) {
       final fresh = previous == null && status == 'NOUVELLE';
@@ -146,7 +192,7 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
         title: fresh ? 'Nouvelle commande cuisine' : 'Mise à jour cuisine',
         number: number,
         detail: detail,
-        kitchen: true,
+        kind: 'kitchen',
       );
     }
 
@@ -156,7 +202,7 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
         title: previous == null ? 'Nouvelle commande' : 'Mise à jour commande',
         number: number,
         detail: detail,
-        kitchen: false,
+        kind: 'cashier',
       );
     }
 
@@ -166,7 +212,7 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
         title: 'Cuisine terminée — retour caisse',
         number: number,
         detail: detail,
-        kitchen: false,
+        kind: 'cashier',
       );
     }
 
@@ -176,7 +222,7 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
         title: 'Mise à jour commande',
         number: number,
         detail: detail,
-        kitchen: false,
+        kind: 'cashier',
       );
     }
 
@@ -190,11 +236,13 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
 
   void _dismiss({bool open = false}) {
     NdjoOrderRing.stop();
-    final kitchen = _alert?.kitchen ?? false;
+    final kind = _alert?.kind;
     setState(() => _alert = null);
     if (!open) return;
-    if (kitchen) {
+    if (kind == 'kitchen') {
       widget.onOpenKitchen?.call();
+    } else if (kind == 'driver') {
+      widget.onOpenDriver?.call();
     } else {
       widget.onOpenCashier?.call();
     }

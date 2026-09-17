@@ -127,7 +127,7 @@ class _Home extends StatelessWidget {
           (Icons.soup_kitchen_outlined, 'Cuisine', KitchenPage(session: session)),
         ]);
       case 'LIVREUR':
-        return RoleShell(session: session, title: 'Livraison', pages: [
+        return RoleShell(session: session, title: 'Livraison', driverAlerts: true, pages: [
           (Icons.delivery_dining, 'Livraisons', DeliveryPage(session: session)),
         ]);
       case 'CLIENT':
@@ -395,6 +395,7 @@ class _AdminShellState extends State<AdminShell> {
       cashier: true,
       onOpenKitchen: () => setState(() => index = 14),
       onOpenCashier: () => setState(() => index = 13),
+      onOpenDriver: () => setState(() => index = 15),
       child: Scaffold(
       appBar: AppBar(
         title: Text(compact ? items[index].$2 : 'NDJO TACOS'),
@@ -472,12 +473,14 @@ class RoleShell extends StatefulWidget {
     required this.pages,
     this.kitchenAlerts = false,
     this.cashierAlerts = false,
+    this.driverAlerts = false,
   });
   final Session session;
   final String title;
   final List<(IconData, String, Widget)> pages;
   final bool kitchenAlerts;
   final bool cashierAlerts;
+  final bool driverAlerts;
 
   @override
   State<RoleShell> createState() => _RoleShellState();
@@ -498,8 +501,10 @@ class _RoleShellState extends State<RoleShell> {
       session: widget.session,
       kitchen: widget.kitchenAlerts,
       cashier: widget.cashierAlerts,
+      driver: widget.driverAlerts,
       onOpenKitchen: () => setState(() => index = _pageIndex('Cuisine')),
       onOpenCashier: () => setState(() => index = _pageIndex('Commandes')),
+      onOpenDriver: () => setState(() => index = _pageIndex('Livraisons')),
       child: Scaffold(
       appBar: AppBar(
         title: Text('${widget.title} — NDJO TACOS'),
