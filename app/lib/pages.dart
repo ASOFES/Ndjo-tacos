@@ -463,12 +463,13 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 12),
           Card(
             child: ListTile(
-              leading: const Icon(Icons.cloud_off),
-              title: Text('${pending.length} opération(s) en attente de synchronisation'),
+              leading: Icon(stats!['offline'] == true && pending.isEmpty ? Icons.cloud_off : Icons.sync),
+              title: Text('${pending.length} opération(s) en attente de confirmation'),
               subtitle: Text(
                 pending.isEmpty
                     ? 'API indisponible. Données locales affichées.'
-                    : pending.map((item) => '${item['number']} · ${item['status']}').join('\n'),
+                    : (widget.session.sync?.lastPendingError ??
+                        pending.map((item) => '${item['number']} · ${item['status']}').join('\n')),
               ),
             ),
           ),

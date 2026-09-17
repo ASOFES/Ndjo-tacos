@@ -100,9 +100,10 @@ export class SyncPushService {
       return { clientUuid, status: 'APPLIQUE', ...applied };
     } catch (error) {
       const message = syncErrorText(error);
-      const refuse = /stock insuffisant|conflit de stock|quantité invalide/i.test(
-        message,
-      );
+      const refuse =
+        /stock insuffisant|conflit de stock|quantité invalide|carence|rupture/i.test(
+          message,
+        );
       const status = refuse ? 'REFUSE' : 'ECHEC';
       await this.prisma.syncOperation.update({
         where: { clientUuid },

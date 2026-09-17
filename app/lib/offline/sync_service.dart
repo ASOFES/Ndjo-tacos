@@ -131,8 +131,51 @@ class SyncService {
     try {
       final applied = await _pushOne(clientUuid, 'ORDER', payload);
       if (applied != null) return applied;
-    } catch (_) {}
-    return local;
+    } on ApiException catch (error) {
+      if (_isUnreachable(error)) return {...local, 'offline': true};
+      await _forgetLocal(clientUuid, establishmentId);
+      rethrow;
+    } catch (_) {
+      return {...local, 'offline': true};
+    }
+    return {...local, 'offline': true};
+  }
+
+  bool _isUnreachable(Object error) {
+    final text = error.toString().toLowerCase();
+    return text.contains('injoignable') ||
+        text.contains('timed out') ||
+        text.contains('timeout') ||
+        text.contains('failed host lookup') ||
+        text.contains('xmlhttprequest') ||
+        text.contains('clientexception');
+  }
+
+  bool _isBusinessFailure(String? message) {
+    final text = (message ?? '').toLowerCase();
+    return text.contains('carence') ||
+        text.contains('stock insuffisant') ||
+        text.contains('conflit de stock') ||
+        text.contains('quantité invalide') ||
+        text.contains('rupture');
+  }
+
+  Future<void> _forgetLocal(String clientUuid, String establishmentId) async {
+    await store.archive(clientUuid, 'REFUSE');
+    if (establishmentId.isEmpty) return;
+    Future<void> drop(String key) {
+      return store.patchList(key, (rows) {
+        return rows.where((item) {
+          if (item is! Map) return true;
+          final map = Map<String, dynamic>.from(item);
+          return map['id']?.toString() != clientUuid &&
+              map['clientUuid']?.toString() != clientUuid;
+        }).toList();
+      });
+    }
+
+    await drop('orders-$establishmentId');
+    await drop('kitchen-$establishmentId');
   }
 
   Future<Map<String, dynamic>> stockExit(Map<String, dynamic> body) async {
@@ -260,7 +303,12 @@ class SyncService {
       throw ApiException(first?['error']?.toString() ?? 'Opération refusée par le serveur');
     }
     if (status == 'ECHEC') {
-      await store.markRetry(clientUuid, first?['error']?.toString() ?? 'Échec sync');
+      final error = first?['error']?.toString() ?? 'Échec sync';
+      if (_isBusinessFailure(error)) {
+        await store.archive(clientUuid, 'REFUSE', error);
+        throw ApiException(error);
+      }
+      await store.markRetry(clientUuid, error);
       return null;
     }
     return null;
@@ -284,20 +332,37 @@ class SyncService {
         if (applied != null) sent++;
       } catch (error) {
         if (error is ApiException) {
+          if (_isUnreachable(error)) {
+            await store.markRetry(uuid, error.toString());
+            break;
+          }
           continue;
         }
         await store.markRetry(uuid, error.toString());
         break;
       }
     }
+    onQueueChanged?.call();
     return sent;
+  }
+
+  String? get lastPendingError {
+    for (final item in store.pending()) {
+      final error = item['error']?.toString().trim();
+      if (error != null && error.isNotEmpty) return error;
+    }
+    return null;
   }
 
   List<Map<String, dynamic>> pendingSales() {
     return store.pending().where((item) => item['type'] == 'ORDER').map((item) {
       final payload = item['payload'];
       final map = payload is Map ? Map<String, dynamic>.from(payload) : <String, dynamic>{};
-      return _localSale(map, item['clientUuid'].toString());
+      return {
+        ..._localSale(map, item['clientUuid'].toString()),
+        'error': item['error'],
+        'retries': item['retries'],
+      };
     }).toList();
   }
 

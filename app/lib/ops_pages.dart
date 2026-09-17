@@ -1186,7 +1186,7 @@ class _PosPageState extends State<PosPage> {
     created['customerPhone'] ??= selectedCustomer?['phone'] ?? phoneCtrl.text;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(offline
-          ? 'Vente enregistrée hors ligne (${order['number']}). Elle sera synchronisée.'
+          ? 'Vente en attente de confirmation serveur (${order['number']}). Pas hors ligne : nouvelle tentative automatique.'
           : pending
               ? 'Commande ${order['number']} · paiement EN_ATTENTE${checkout?['operatorRef'] != null ? ' · réf. ${checkout!['operatorRef']}' : ''}${checkout?['checkoutUrl'] != null ? ' · ${checkout!['checkoutUrl']}' : ''}.'
               : 'Commande ${order['number']} enregistrée. Paiement encaissé.'),
@@ -1248,9 +1248,29 @@ class _PosPageState extends State<PosPage> {
                 Card(
                   child: ListTile(
                     leading: const Icon(Icons.sync),
-                    title: Text('$pendingOps opération(s) en attente de synchronisation'),
-                    subtitle: const Text('File locale. Visible hors ligne, reprise au retour de l’API.'),
-                    trailing: TextButton(onPressed: () => widget.session.sync!.flush().then((_) => _load()), child: const Text('Sync')),
+                    title: Text('$pendingOps opération(s) en attente de confirmation'),
+                    subtitle: Text(
+                      widget.session.sync?.lastPendingError ??
+                          'Vous êtes en ligne. La vente n’est pas encore enregistrée sur le serveur — nouvelle tentative automatique.',
+                    ),
+                    trailing: TextButton(
+                      onPressed: () async {
+                        try {
+                          await widget.session.sync!.flush();
+                          if (!mounted) return;
+                          await _load();
+                          if (!mounted) return;
+                          final leftover = widget.session.sync?.lastPendingError;
+                          if (leftover != null && leftover.isNotEmpty) {
+                            await showCashierError(context, leftover);
+                          }
+                        } catch (e) {
+                          if (!mounted) return;
+                          await showCashierError(context, e);
+                        }
+                      },
+                      child: const Text('Sync'),
+                    ),
                   ),
                 ),
               const SizedBox(height: 8),
@@ -1382,7 +1402,7 @@ class _PosPageState extends State<PosPage> {
                 const Card(
                   child: ListTile(
                     title: Text('Aucune vente locale'),
-                    subtitle: Text('Les commandes LOCAL- apparaissent ici même sans API.'),
+                    subtitle: Text('Les commandes apparaissent ici après encaissement.'),
                   ),
                 ),
               ...orders.take(8).map((item) {
@@ -1390,7 +1410,10 @@ class _PosPageState extends State<PosPage> {
                 return Card(
                   child: ListTile(
                     title: Text('${map['number']} · ${map['status']}'),
-                    subtitle: Text('${map['type']} · ${map['user'] is Map ? map['user']['name'] ?? '' : ''}'),
+                    subtitle: Text([
+                      '${map['type']} · ${map['user'] is Map ? map['user']['name'] ?? '' : ''}',
+                      if ((map['error']?.toString() ?? '').trim().isNotEmpty) map['error'].toString(),
+                    ].where((line) => line.trim().isNotEmpty).join('\n')),
                     trailing: Text(fc(_asPosNum(map['total']))),
                     onTap: () => showTicketSheet(context, session: widget.session, order: map),
                   ),

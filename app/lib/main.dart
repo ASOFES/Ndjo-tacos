@@ -403,7 +403,7 @@ class _AdminShellState extends State<AdminShell> {
             if (localStore.pendingCount > 0)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: Center(child: Text('${localStore.pendingCount} op. hors ligne', style: const TextStyle(color: NdjoColors.accent, fontSize: 12))),
+                child: Center(child: Text('${localStore.pendingCount} op. en attente', style: const TextStyle(color: NdjoColors.accent, fontSize: 12))),
               ),
             if (!compact)
             Padding(
