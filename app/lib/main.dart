@@ -182,11 +182,17 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final username = TextEditingController(text: 'admin');
-  final password = TextEditingController(text: 'admin123');
+  final username = TextEditingController();
+  final password = TextEditingController();
   late final server = TextEditingController(text: Api.baseUrl);
   bool loading = false;
   String? error;
+
+  bool get _publicSite {
+    if (Api.compiledApiBase.isNotEmpty) return true;
+    final host = Uri.base.host.toLowerCase();
+    return host.endsWith('.netlify.app');
+  }
 
   @override
   void dispose() {
@@ -202,10 +208,14 @@ class _LoginScreenState extends State<LoginScreen> {
       error = null;
     });
     try {
-      await Api.setBase(server.text);
+      if (!_publicSite) {
+        await Api.setBase(server.text);
+      }
       await widget.session.login(username.text.trim(), password.text);
     } catch (e) {
-      setState(() => error = e.toString());
+      setState(() {
+        error = e is ApiException ? e.message : 'Connexion impossible. Réessayez.';
+      });
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -228,19 +238,33 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   const Text('NDJO TACOS', textAlign: TextAlign.center, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: NdjoColors.primary)),
                   const SizedBox(height: 6),
-                  const Text('Wi‑Fi du restaurant — Internet non obligatoire', textAlign: TextAlign.center, style: TextStyle(color: NdjoColors.muted)),
+                  const Text('Connexion', textAlign: TextAlign.center, style: TextStyle(color: NdjoColors.muted)),
                   const SizedBox(height: 24),
-                  TextField(
-                    controller: server,
-                    decoration: const InputDecoration(
-                      labelText: 'Serveur LAN',
-                      hintText: 'http://192.168.1.10:3000',
+                  if (!_publicSite) ...[
+                    TextField(
+                      controller: server,
+                      decoration: const InputDecoration(
+                        labelText: 'Serveur LAN',
+                        hintText: 'http://192.168.1.10:3000',
+                      ),
                     ),
+                    const SizedBox(height: 12),
+                  ],
+                  TextField(
+                    controller: username,
+                    autofillHints: const [AutofillHints.username],
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(labelText: 'Nom utilisateur'),
                   ),
                   const SizedBox(height: 12),
-                  TextField(controller: username, decoration: const InputDecoration(labelText: 'Nom utilisateur')),
-                  const SizedBox(height: 12),
-                  TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Mot de passe'), onSubmitted: (_) => _submit()),
+                  TextField(
+                    controller: password,
+                    obscureText: true,
+                    autofillHints: const [AutofillHints.password],
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(labelText: 'Mot de passe'),
+                    onSubmitted: (_) => _submit(),
+                  ),
                   if (error != null) ...[
                     const SizedBox(height: 12),
                     Text(error!, style: const TextStyle(color: NdjoColors.danger)),
@@ -260,15 +284,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: widget.session.openClientShop,
                     child: const Text('Commander en tant que client'),
                   ),
-                  Text(
-                    Uri.base.host.isEmpty || Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1'
-                        ? 'Sur téléphone : ouvrez http://IP-DU-PC:5192 — l’API suit cette IP (:3000).'
-                        : 'Téléphone : http://${Uri.base.host}:5192  ·  API http://${Uri.base.host}:3000',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: NdjoColors.muted, fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text('admin / caissier / magasin / cuisine / livreur / client  ·  admin123', textAlign: TextAlign.center, style: TextStyle(color: NdjoColors.muted, fontSize: 12)),
                 ],
               ),
             ),
