@@ -1,0 +1,13 @@
+app
+.cursor
+.git
+backend/node_modules
+backend/dist
+backend/.env
+backend/pgdata
+backend/uploads
+backend/storage
+backend/scripts
+**/node_modules
+**/.dart_tool
+**/build
