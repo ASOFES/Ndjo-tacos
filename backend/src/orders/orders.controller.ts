@@ -14,7 +14,7 @@ import { JwtGuard } from '../auth/jwt.guard';
 import { AccessGuard } from '../auth/access.guard';
 import { RequirePermission } from '../auth/require-permission.decorator';
 import { PaymentService } from '../payments/payment.service';
-import { OrdersService, isDrinkCategory } from './orders.service';
+import { OrdersService, isDrinkCategory, kitchenBoardWhere } from './orders.service';
 import { WhatsAppService } from '../notifications/whatsapp.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
 import { assertSameEstablishment, AuthedRequest, mustExist } from '../auth/scope';
@@ -37,12 +37,10 @@ export class OrdersController {
     @Query('kitchen') kitchen?: string,
   ) {
     const orders = await this.prisma.order.findMany({
-      where: {
-        establishmentId,
-        ...(kitchen === '1'
-          ? { status: { in: ['NOUVELLE', 'EN_PREPARATION', 'PRETE'] } }
-          : {}),
-      },
+      where:
+        kitchen === '1'
+          ? kitchenBoardWhere(establishmentId)
+          : { establishmentId },
       include: {
         items: true,
         payments: true,
@@ -52,8 +50,8 @@ export class OrdersController {
         customer: { select: { id: true, name: true, phone: true } },
         deliveryZone: true,
       },
-      orderBy: { createdAt: 'desc' },
-      take: 80,
+      orderBy: kitchen === '1' ? { updatedAt: 'desc' } : { createdAt: 'desc' },
+      take: kitchen === '1' ? 200 : 80,
     });
     if (kitchen !== '1') {
       return this.orders.withCashierStock(orders, establishmentId);
@@ -216,12 +214,13 @@ export class OrdersController {
       'Commande introuvable',
     );
     assertSameEstablishment(current.establishmentId, req);
-    let nextStatus = body.status;
-    if (body.status === 'NOUVELLE' && current.status === 'EN_CAISSE') {
+    const requested = body.status;
+    let nextStatus = requested;
+    if (requested === 'NOUVELLE' && current.status === 'EN_CAISSE') {
       nextStatus = await this.orders.consumeCounterDrinks(id, req.user.sub);
     }
     if (
-      (nextStatus === 'EN_PREPARATION' || nextStatus === 'PRETE') &&
+      (requested === 'EN_PREPARATION' || requested === 'PRETE') &&
       current.status !== 'EN_PREPARATION' &&
       current.status !== 'PRETE'
     ) {

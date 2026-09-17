@@ -15,6 +15,23 @@ export function isDrinkCategory(name?: string | null) {
   return normalized.includes('boisson');
 }
 
+/** Commandes cuisine : hors boissons seules, pour ne pas noyer le tableau (take) avec les PRETE caisse. */
+export function kitchenBoardWhere(establishmentId: string): Prisma.OrderWhereInput {
+  return {
+    establishmentId,
+    status: { in: ['NOUVELLE', 'EN_PREPARATION', 'PRETE'] },
+    items: {
+      some: {
+        product: {
+          category: {
+            NOT: { name: { contains: 'boisson', mode: 'insensitive' } },
+          },
+        },
+      },
+    },
+  };
+}
+
 export type StockShortage = {
   productId: string;
   name: string;

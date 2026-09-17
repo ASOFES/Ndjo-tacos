@@ -124,7 +124,9 @@ class SyncService {
     final establishmentId = payload['establishmentId']?.toString() ?? '';
     if (establishmentId.isNotEmpty) {
       await store.upsertRow('orders-$establishmentId', local);
-      await store.upsertRow('kitchen-$establishmentId', {...local, 'status': 'NOUVELLE'});
+      if (saleNeedsKitchen(local, establishmentId: establishmentId)) {
+        await store.upsertRow('kitchen-$establishmentId', {...local, 'status': 'NOUVELLE'});
+      }
     }
     try {
       final applied = await _pushOne(clientUuid, 'ORDER', payload);
@@ -299,6 +301,32 @@ class SyncService {
     }).toList();
   }
 
+  bool saleNeedsKitchen(Map<String, dynamic> sale, {String? establishmentId}) {
+    final items = sale['items'] as List<dynamic>? ?? [];
+    if (items.isEmpty) return true;
+    final id = establishmentId ?? sale['establishmentId']?.toString() ?? '';
+    final catalog = store.readCatalog(id);
+    final byId = <String, Map<String, dynamic>>{};
+    for (final row in catalog) {
+      if (row is! Map) continue;
+      final map = Map<String, dynamic>.from(row);
+      final productId = map['id']?.toString();
+      if (productId != null) byId[productId] = map;
+    }
+    if (byId.isEmpty) return true;
+    return items.any((item) {
+      if (item is! Map) return true;
+      final map = Map<String, dynamic>.from(item);
+      final product = byId[map['productId']?.toString()];
+      if (product == null) return true;
+      final category = product['category'];
+      final name = category is Map
+          ? category['name']?.toString() ?? ''
+          : product['categoryName']?.toString() ?? '';
+      return !name.toLowerCase().contains('boisson');
+    });
+  }
+
   Future<void> pull(String establishmentId) async {
     try {
       final since = store.lastPull();
@@ -314,8 +342,13 @@ class SyncService {
       await store.cacheLots(establishmentId, lots);
       await store.cacheList('stock-lots-$establishmentId', lots);
       final orders = data['orders'] as List<dynamic>? ?? [];
-      await store.cacheKitchen(establishmentId, orders);
-      await store.cacheList('kitchen-$establishmentId', orders);
+      final kitchen = orders.where((item) {
+        if (item is! Map) return false;
+        final status = item['status']?.toString();
+        return status == 'NOUVELLE' || status == 'EN_PREPARATION' || status == 'PRETE';
+      }).toList();
+      await store.cacheKitchen(establishmentId, kitchen);
+      await store.cacheList('kitchen-$establishmentId', kitchen);
       await store.cacheList('orders-$establishmentId', orders);
       final recipes = data['recipes'] as List<dynamic>? ?? [];
       if (recipes.isNotEmpty) {

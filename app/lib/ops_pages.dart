@@ -1535,21 +1535,29 @@ class _KitchenPageState extends State<KitchenPage> {
 
   Future<void> _load() async {
     try {
-      final list = await widget.session.cachedList('/orders?establishmentId=$_id&kitchen=1', 'kitchen-$_id');
+      final list = await widget.session.api.getList('/orders?establishmentId=$_id&kitchen=1');
+      if (widget.session.sync != null) {
+        await widget.session.sync!.store.cacheList('kitchen-$_id', list);
+        await widget.session.sync!.store.cacheKitchen(_id, list);
+      }
       final pending = widget.session.sync?.pendingSales() ?? [];
-      final pendingIds = pending.map((item) => item['clientUuid']?.toString()).toSet();
+      final pendingKitchen = pending.where((item) {
+        return widget.session.sync?.saleNeedsKitchen(item, establishmentId: _id) ?? true;
+      }).toList();
+      final pendingIds = pendingKitchen.map((item) => item['clientUuid']?.toString()).toSet();
       final merged = [
-        ...pending.map((item) => {...item, 'status': item['status'] ?? 'NOUVELLE'}),
+        ...pendingKitchen.map((item) => {...item, 'status': item['status'] ?? 'NOUVELLE'}),
         ...list.where((item) {
           final map = item as Map;
-          if (map['status']?.toString() == 'EN_CAISSE') return false;
+          final status = map['status']?.toString();
+          if (status == 'EN_CAISSE') return false;
           return !pendingIds.contains(map['clientUuid']?.toString()) &&
               !pendingIds.contains(map['id']?.toString());
         }),
       ];
       if (!mounted) return;
       setState(() {
-        orders = merged.isNotEmpty ? merged : orders;
+        orders = merged;
         loading = false;
         error = null;
       });
@@ -1588,8 +1596,9 @@ class _KitchenPageState extends State<KitchenPage> {
   Widget build(BuildContext context) {
     if (loading) return const Center(child: CircularProgressIndicator());
     if (error != null) return _Retry(error: error!, onRetry: _load);
-    List<dynamic> column(String status) => orders.where((item) => item['status'] == status).toList();
-    Widget card(Map<String, dynamic> order, String action, String next) {
+    List<dynamic> column(String status) =>
+        orders.where((item) => item['status']?.toString() == status).toList();
+    Widget card(Map<String, dynamic> order, {String? action, String? next}) {
       final foods = (order['kitchenFoods'] as List<dynamic>? ?? []);
       final items = (order['items'] as List<dynamic>? ?? []);
       return Card(
@@ -1637,10 +1646,22 @@ class _KitchenPageState extends State<KitchenPage> {
                 );
               })),
               const SizedBox(height: 12),
-              FilledButton(onPressed: () => _setStatus(order['id'].toString(), next), child: Text(action)),
+              if (action != null && next != null)
+                FilledButton(onPressed: () => _setStatus(order['id'].toString(), next), child: Text(action))
+              else
+                const Text('Prête — en attente caisse / livraison', style: TextStyle(color: NdjoColors.muted, fontSize: 12)),
             ],
           ),
         ),
+      );
+    }
+    Widget lane(String status, String title, {String? action, String? next}) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+          ...column(status).map((item) => card(Map<String, dynamic>.from(item as Map), action: action, next: next)),
+        ],
       );
     }
     return ListView(
@@ -1652,41 +1673,27 @@ class _KitchenPageState extends State<KitchenPage> {
             IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
           ],
         ),
-        const Text('Réseau local · ticket cuisine = aliments de la recette. Le stock sort au COMMENCER, lot par lot.', style: TextStyle(color: NdjoColors.muted)),
+        const Text('Ticket cuisine = aliments. COMMENCER sort le stock. TERMINÉ envoie à la caisse ; le ticket reste visible ici jusqu’à encaissement / livraison.', style: TextStyle(color: NdjoColors.muted)),
         const SizedBox(height: 16),
         ndjoCompact(context)
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('🔴 NOUVELLES', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ...column('NOUVELLE').map((item) => card(Map<String, dynamic>.from(item as Map), 'COMMENCER', 'EN_PREPARATION')),
+                  lane('NOUVELLE', '🔴 NOUVELLES', action: 'COMMENCER', next: 'EN_PREPARATION'),
                   const SizedBox(height: 16),
-                  const Text('🟡 EN PRÉPARATION', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ...column('EN_PREPARATION').map((item) => card(Map<String, dynamic>.from(item as Map), 'TERMINÉ', 'PRETE')),
+                  lane('EN_PREPARATION', '🟡 EN PRÉPARATION', action: 'TERMINÉ', next: 'PRETE'),
+                  const SizedBox(height: 16),
+                  lane('PRETE', '🟢 PRÊTES'),
                 ],
               )
             : Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('🔴 NOUVELLES', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ...column('NOUVELLE').map((item) => card(Map<String, dynamic>.from(item as Map), 'COMMENCER', 'EN_PREPARATION')),
-                ],
-              ),
-            ),
+            Expanded(child: lane('NOUVELLE', '🔴 NOUVELLES', action: 'COMMENCER', next: 'EN_PREPARATION')),
             const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('🟡 EN PRÉPARATION', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ...column('EN_PREPARATION').map((item) => card(Map<String, dynamic>.from(item as Map), 'TERMINÉ', 'PRETE')),
-                ],
-              ),
-            ),
+            Expanded(child: lane('EN_PREPARATION', '🟡 EN PRÉPARATION', action: 'TERMINÉ', next: 'PRETE')),
+            const SizedBox(width: 16),
+            Expanded(child: lane('PRETE', '🟢 PRÊTES')),
           ],
         ),
       ],

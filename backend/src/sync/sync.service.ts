@@ -250,6 +250,7 @@ export class SyncPushService {
     if (current.establishmentId !== establishmentId) {
       throw new BadRequestException('Commande hors établissement');
     }
+    const requested = status;
     if (current.status === status) {
       return { number: current.number, id: current.id };
     }
@@ -257,7 +258,7 @@ export class SyncPushService {
       status = await this.orders.consumeCounterDrinks(current.id, userId);
     }
     if (
-      (status === 'EN_PREPARATION' || status === 'PRETE') &&
+      (requested === 'EN_PREPARATION' || requested === 'PRETE') &&
       current.status !== 'EN_PREPARATION' &&
       current.status !== 'PRETE'
     ) {

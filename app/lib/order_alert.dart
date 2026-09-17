@@ -94,28 +94,27 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
     ].join('#');
   }
 
+  void _ingest(List<dynamic> list, Map<String, Map<String, dynamic>> byId) {
+    for (final item in list) {
+      if (item is! Map) continue;
+      final map = Map<String, dynamic>.from(item);
+      final id = map['id']?.toString();
+      if (id != null) byId[id] = {...?byId[id], ...map};
+    }
+  }
+
   Future<void> _tick() async {
     if (_id.isEmpty) return;
     try {
       final byId = <String, Map<String, dynamic>>{};
-      if (widget.kitchen || widget.cashier) {
-        final list = await widget.session.api.getList('/orders?establishmentId=$_id');
-        for (final item in list) {
-          if (item is! Map) continue;
-          final map = Map<String, dynamic>.from(item);
-          final id = map['id']?.toString();
-          if (id != null) byId[id] = map;
-        }
+      if (widget.cashier) {
+        _ingest(await widget.session.api.getList('/orders?establishmentId=$_id'), byId);
+      }
+      if (widget.kitchen) {
+        _ingest(await widget.session.api.getList('/orders?establishmentId=$_id&kitchen=1'), byId);
       }
       if (widget.driver) {
-        final list = await widget.session.api.getList('/delivery?establishmentId=$_id');
-        for (final item in list) {
-          if (item is! Map) continue;
-          final map = Map<String, dynamic>.from(item);
-          final id = map['id']?.toString();
-          if (id == null) continue;
-          byId[id] = {...?byId[id], ...map};
-        }
+        _ingest(await widget.session.api.getList('/delivery?establishmentId=$_id'), byId);
       }
       if (!mounted) return;
       final orders = byId.values.toList();
