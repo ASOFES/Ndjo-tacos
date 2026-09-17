@@ -4,6 +4,7 @@ import 'api.dart';
 import 'osm_map.dart';
 import 'session.dart';
 import 'theme.dart';
+import 'time_fmt.dart';
 
 Color _tone(String? status) {
   switch (status) {
@@ -432,8 +433,4 @@ class _TrackOrderPageState extends State<TrackOrderPage> {
   }
 }
 
-String _fmtTrack(dynamic value) {
-  if (value == null) return '—';
-  final text = value.toString();
-  return text.contains('T') ? text.replaceFirst('T', ' ').split('.').first : text;
-}
+String _fmtTrack(dynamic value) => formatLocalDateTime(value);

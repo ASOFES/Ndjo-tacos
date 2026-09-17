@@ -10,6 +10,7 @@ import 'session.dart';
 import 'theme.dart';
 import 'ticket.dart';
 import 'osm_map.dart';
+import 'time_fmt.dart';
 
 class RecipesPage extends StatefulWidget {
   const RecipesPage({super.key, required this.session});
@@ -889,11 +890,7 @@ String _driverStatus(String? value) {
   return '⚫ Hors ligne';
 }
 
-String _fmt(dynamic value) {
-  if (value == null) return '—';
-  final text = value.toString();
-  return text.contains('T') ? text.replaceFirst('T', ' ').split('.').first : text;
-}
+String _fmt(dynamic value) => formatLocalDateTime(value);
 
 String _fmtDuration(dynamic minutes) {
   if (minutes == null) return 'durée —';

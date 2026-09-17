@@ -4,6 +4,7 @@ import 'open_link.dart';
 import 'osm_map_stub.dart' if (dart.library.html) 'osm_map_web.dart';
 import 'osm_types.dart';
 import 'theme.dart';
+import 'time_fmt.dart';
 
 export 'osm_types.dart';
 export 'osm_map_stub.dart' if (dart.library.html) 'osm_map_web.dart';
@@ -147,8 +148,4 @@ OsmLatLng? _point(Map<dynamic, dynamic>? data) {
   return OsmLatLng(lat.toDouble(), lng.toDouble());
 }
 
-String _defaultTime(dynamic value) {
-  if (value == null) return '—';
-  final text = value.toString();
-  return text.contains('T') ? text.replaceFirst('T', ' ').split('.').first : text;
-}
+String _defaultTime(dynamic value) => formatLocalDateTime(value);

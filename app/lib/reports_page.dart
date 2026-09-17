@@ -4,6 +4,7 @@ import 'company.dart';
 import 'pages.dart';
 import 'session.dart';
 import 'theme.dart';
+import 'time_fmt.dart';
 
 class ReportsPage extends StatefulWidget {
   const ReportsPage({super.key, required this.session});
@@ -205,7 +206,7 @@ class _ReportsPageState extends State<ReportsPage> {
                   _ => row['type']?.toString() ?? '',
                 };
                 return [
-                  row['createdAt']?.toString().replaceFirst('T', ' ').split('.').first ?? '—',
+                  formatLocalDateTime(row['createdAt']),
                   row['product']?.toString() ?? '',
                   row['lot']?.toString() ?? '—',
                   row['entryDate']?.toString().split('T').first ?? '—',
