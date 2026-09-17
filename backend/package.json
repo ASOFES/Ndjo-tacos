@@ -7,7 +7,7 @@
     "start:prod": "node dist/src/main.js",
     "start:railway": "node scripts/railway-start.cjs",
     "start:dev": "nest start --watch",
-    "build": "prisma generate && nest build",
+    "build": "prisma generate && nest build && tsc -p tsconfig.seed.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",

@@ -4,7 +4,7 @@ WORKDIR /app
 COPY backend/package.json backend/package-lock.json ./
 RUN npm ci
 COPY backend/ ./
-RUN npx prisma generate && npx nest build
+RUN npm run build
 
 FROM node:22-alpine
 RUN apk add --no-cache openssl libc6-compat
