@@ -1,0 +1,14 @@
+NDJO TACOS — Windows (n'importe quel PC 64 bits)
+
+1. Double-cliquez sur Installer-NDJO-TACOS.bat
+2. Un raccourci "NDJO TACOS" apparait sur le Bureau
+3. Connectez-vous avec vos identifiants (ex. admin)
+
+Windows 10 ou 11, 64 bits. Pas besoin d'administrateur.
+Si Windows bloque le fichier : Autres options → Executer quand meme.
+
+Desinstallation : Desinstaller.ps1 dans
+%LOCALAPPDATA%\Programs\NDJO-TACOS
+
+L'application se connecte a l'API :
+https://ndjo-tacos-production.up.railway.app

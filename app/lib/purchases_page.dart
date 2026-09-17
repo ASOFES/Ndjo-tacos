@@ -111,28 +111,81 @@ class _PurchasesPageState extends State<PurchasesPage> {
       ),
     );
     if (ok != true) return;
-    final payload = {
-      'establishmentId': _id,
-      'name': name.text.trim(),
-      'phone': phone.text.trim(),
-      'email': email.text.trim(),
-      'address': address.text.trim(),
-      'status': status,
-    };
-    if (current == null) {
-      await widget.session.api.post('/suppliers', payload);
-    } else {
-      await widget.session.api.put('/suppliers/${current['id']}', payload);
+    try {
+      final payload = {
+        'establishmentId': _id,
+        'name': name.text.trim(),
+        'phone': phone.text.trim(),
+        'email': email.text.trim(),
+        'address': address.text.trim(),
+        'status': status,
+      };
+      if (current == null) {
+        await widget.session.api.post('/suppliers', payload);
+      } else {
+        await widget.session.api.put('/suppliers/${current['id']}', payload);
+      }
+      if (!mounted) return;
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     }
-    await _load();
   }
 
   Future<void> _createPurchase() async {
-    if (suppliers.isEmpty || products.isEmpty) return;
-    String supplierId = suppliers.first['id'].toString();
-    String productId = products.first['id'].toString();
+    if (_id.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choisissez un établissement (pas « Tous ») avant de créer un bon d’achat.')),
+      );
+      return;
+    }
+    var activeSuppliers = suppliers.where((item) => item is Map && item['status']?.toString() != 'INACTIF').toList();
+    var catalog = products;
+    if (catalog.isEmpty) {
+      try {
+        catalog = await widget.session.cachedList('/catalog/products?establishmentId=$_id', 'catalog-$_id-TOUS');
+        if (mounted && catalog.isNotEmpty) setState(() => products = catalog);
+      } catch (_) {}
+    }
+    if (activeSuppliers.isEmpty) {
+      try {
+        final loaded = await widget.session.cachedList('/suppliers?establishmentId=$_id', 'suppliers-$_id');
+        if (loaded.isNotEmpty) {
+          suppliers = loaded;
+          activeSuppliers = loaded.where((item) => item is Map && item['status']?.toString() != 'INACTIF').toList();
+          if (mounted) setState(() {});
+        }
+      } catch (_) {}
+    }
+    if (activeSuppliers.isEmpty) {
+      if (!mounted) return;
+      final create = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Aucun fournisseur'),
+          content: const Text('Cet établissement n’a pas encore de fournisseur. Créez-en un pour pouvoir ajouter un bon d’achat.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Fermer')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Nouveau fournisseur')),
+          ],
+        ),
+      );
+      if (create == true) await _editSupplier();
+      return;
+    }
+    if (catalog.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aucun produit dans cet établissement. Ouvrez le catalogue d’abord.')),
+      );
+      return;
+    }
+    String supplierId = activeSuppliers.first['id'].toString();
+    String productId = catalog.first['id'].toString();
     final qty = TextEditingController(text: '10');
-    final price = TextEditingController(text: '${products.first['priceBuy'] ?? 0}');
+    final price = TextEditingController(text: '${catalog.first['priceBuy'] ?? 0}');
     final location = TextEditingController(text: 'Dépôt principal');
     final ok = await showDialog<bool>(
       context: context,
@@ -147,7 +200,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
                 DropdownButtonFormField<String>(
                   initialValue: supplierId,
                   isExpanded: true,
-                  items: suppliers.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text(item['name'].toString(), overflow: TextOverflow.ellipsis))).toList(),
+                  items: activeSuppliers.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text(item['name'].toString(), overflow: TextOverflow.ellipsis))).toList(),
                   onChanged: (value) => setLocal(() => supplierId = value ?? supplierId),
                   decoration: const InputDecoration(labelText: 'Fournisseur'),
                 ),
@@ -155,9 +208,12 @@ class _PurchasesPageState extends State<PurchasesPage> {
                 DropdownButtonFormField<String>(
                   initialValue: productId,
                   isExpanded: true,
-                  items: products.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text('${item['name']} · ${item['format'] ?? item['unit']}', overflow: TextOverflow.ellipsis))).toList(),
+                  items: catalog.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text('${item['name']} · ${item['format'] ?? item['unit']}', overflow: TextOverflow.ellipsis))).toList(),
                   onChanged: (value) {
-                    final product = products.firstWhere((item) => item['id'] == value);
+                    final product = catalog.cast<dynamic>().firstWhere(
+                      (item) => item['id'].toString() == value,
+                      orElse: () => catalog.first,
+                    );
                     setLocal(() {
                       productId = value ?? productId;
                       price.text = '${product['priceBuy'] ?? 0}';
@@ -182,23 +238,30 @@ class _PurchasesPageState extends State<PurchasesPage> {
       ),
     );
     if (ok != true) return;
-    final created = await widget.session.api.post('/purchases', {
-      'establishmentId': _id,
-      'supplierId': supplierId,
-      'location': location.text.trim(),
-      'lines': [
-        {
-          'productId': productId,
-          'quantity': num.parse(qty.text.replaceAll(',', '.')),
-          'unitPrice': int.parse(price.text),
-        },
-      ],
-    });
-    setState(() {
-      tab = 'achats';
-      open = created;
-    });
-    await _load();
+    try {
+      final created = await widget.session.api.post('/purchases', {
+        'establishmentId': _id,
+        'supplierId': supplierId,
+        'location': location.text.trim(),
+        'lines': [
+          {
+            'productId': productId,
+            'quantity': num.parse(qty.text.replaceAll(',', '.')),
+            'unitPrice': int.tryParse(price.text.replaceAll(' ', '')) ?? 0,
+          },
+        ],
+      });
+      if (!mounted) return;
+      setState(() {
+        tab = 'achats';
+        open = created;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bon d’achat ${created['number'] ?? ''} créé.')));
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
   }
 
   Future<void> _receive(Map<String, dynamic> line) async {

@@ -16,6 +16,7 @@ import { RequirePermission } from '../auth/require-permission.decorator';
 import { assertSameEstablishment, AuthedRequest, mustExist } from '../auth/scope';
 import { PurchasesService } from './purchases.service';
 import { PrismaService } from '../prisma.service';
+import { SiteProvisionService } from '../organization/site-provision.service';
 
 @Controller()
 @UseGuards(JwtGuard, AccessGuard)
@@ -23,11 +24,13 @@ export class PurchasesController {
   constructor(
     private readonly purchases: PurchasesService,
     private readonly prisma: PrismaService,
+    private readonly sites: SiteProvisionService,
   ) {}
 
   @Get('suppliers')
   @RequirePermission('achats.voir', 'stock.voir')
-  suppliers(@Query('establishmentId') establishmentId: string) {
+  async suppliers(@Query('establishmentId') establishmentId: string) {
+    await this.sites.ensureReady(establishmentId);
     return this.purchases.listSuppliers(establishmentId);
   }
 
@@ -53,7 +56,8 @@ export class PurchasesController {
 
   @Get('purchases')
   @RequirePermission('achats.voir', 'stock.voir')
-  list(@Query('establishmentId') establishmentId: string) {
+  async list(@Query('establishmentId') establishmentId: string) {
+    await this.sites.ensureReady(establishmentId);
     return this.purchases.listPurchases(establishmentId);
   }
 

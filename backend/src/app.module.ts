@@ -45,6 +45,8 @@ import { PermissionsController } from './auth/permissions.controller';
 import { PermissionService } from './auth/permission.service';
 import { SyncPushService } from './sync/sync.service';
 import { SiteProvisionService } from './organization/site-provision.service';
+import { ExportController } from './export/export.controller';
+import { ExportService } from './export/export.service';
 
 @Module({
   imports: [
@@ -77,6 +79,7 @@ import { SiteProvisionService } from './organization/site-provision.service';
     ReportsController,
     PurchasesController,
     PermissionsController,
+    ExportController,
   ],
   providers: [
     PrismaService,
@@ -103,6 +106,7 @@ import { SiteProvisionService } from './organization/site-provision.service';
     PurchasesService,
     SyncPushService,
     SiteProvisionService,
+    ExportService,
   ],
 })
 export class AppModule {}

@@ -308,7 +308,7 @@ class _OrdersPageState extends State<OrdersPage> {
       await _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      await showCashierError(context, e);
     }
   }
 
@@ -322,6 +322,11 @@ class _OrdersPageState extends State<OrdersPage> {
         const Text('Commandes', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
         const Text('Les commandes client arrivent ici. La caisse les envoie ensuite en cuisine.', style: TextStyle(color: NdjoColors.muted)),
         const Text('Touchez une commande pour WhatsApp, impression facture ou bon de commande.', style: TextStyle(color: NdjoColors.muted, fontSize: 12)),
+        const SizedBox(height: 8),
+        ndjoExportButtons(
+          onExcel: () => downloadNdjoExport(context, widget.session, kind: 'sales', format: 'xls', period: 'jour'),
+          onPdf: () => downloadNdjoExport(context, widget.session, kind: 'sales', format: 'pdf', period: 'jour'),
+        ),
         const SizedBox(height: 12),
         cashierClientInbox(
           orders: waiting,

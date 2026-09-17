@@ -41,6 +41,26 @@ export class PermissionService implements OnModuleInit {
         });
       }
     }
+    const transferId = idByKey['stock.transfert'];
+    if (transferId) {
+      for (const role of ['GESTIONNAIRE', 'MAGASINIER'] as const) {
+        await this.prisma.rolePermission.upsert({
+          where: { role_permissionId: { role, permissionId: transferId } },
+          create: { role, permissionId: transferId },
+          update: {},
+        });
+      }
+    }
+    const purchaseId = idByKey['achats.modifier'];
+    if (purchaseId) {
+      for (const role of ['GESTIONNAIRE', 'MAGASINIER'] as const) {
+        await this.prisma.rolePermission.upsert({
+          where: { role_permissionId: { role, permissionId: purchaseId } },
+          create: { role, permissionId: purchaseId },
+          update: {},
+        });
+      }
+    }
     this.cache.clear();
   }
 

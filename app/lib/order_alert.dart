@@ -90,6 +90,7 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
       order['driverId'] ?? '',
       order['address'] ?? '',
       lines,
+      orderShortageMessage(order),
     ].join('#');
   }
 
@@ -197,11 +198,16 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
     }
 
     if (widget.cashier && status == 'EN_CAISSE') {
+      final shortage = orderShortageMessage(order);
       return OrderAlert(
         orderId: id,
-        title: previous == null ? 'Nouvelle commande' : 'Mise à jour commande',
+        title: shortage.isNotEmpty
+            ? 'Produit en carence'
+            : previous == null
+                ? 'Nouvelle commande'
+                : 'Mise à jour commande',
         number: number,
-        detail: detail,
+        detail: shortage.isNotEmpty ? '$shortage\n$detail'.trim() : detail,
         kind: 'cashier',
       );
     }

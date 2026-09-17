@@ -55,7 +55,10 @@ export class OrdersController {
       orderBy: { createdAt: 'desc' },
       take: 80,
     });
-    if (kitchen !== '1' || orders.length === 0) return orders;
+    if (kitchen !== '1') {
+      return this.orders.withCashierStock(orders, establishmentId);
+    }
+    if (orders.length === 0) return orders;
     const productIds = [
       ...new Set(orders.flatMap((order) => order.items.map((item) => item.productId))),
     ];

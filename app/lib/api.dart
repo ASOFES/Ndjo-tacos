@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class Api {
   static const appVersion = '1.0.0';
-  static const appBuild = 3;
+  static const appBuild = 4;
   static const prefsKey = 'ndjo_api_base';
   static String? _override;
 
@@ -128,15 +128,39 @@ class Api {
     return _decode(response);
   }
 
+  Future<({String name, List<int> bytes, String mime})> getFile(String path) async {
+    final response = await _send(
+      () => http.get(Uri.parse('$baseUrl$path'), headers: _headers()),
+      timeout: const Duration(seconds: 60),
+    );
+    if (response.statusCode >= 400) {
+      try {
+        throw ApiException(_message(jsonDecode(response.body)));
+      } catch (error) {
+        if (error is ApiException) rethrow;
+        throw ApiException('Extraction impossible');
+      }
+    }
+    final mime = response.headers['content-type'] ?? 'application/octet-stream';
+    final disposition = response.headers['content-disposition'] ?? '';
+    final match = RegExp(r'filename="?([^"]+)"?').firstMatch(disposition);
+    return (
+      name: match?.group(1) ?? 'ndjo-export',
+      bytes: response.bodyBytes,
+      mime: mime.split(';').first,
+    );
+  }
+
   Future<http.Response> _send(
     Future<http.Response> Function() request, {
     bool skipRefresh = false,
+    Duration timeout = const Duration(seconds: 8),
   }) async {
     try {
-      var response = await request().timeout(const Duration(seconds: 8));
+      var response = await request().timeout(timeout);
       if (response.statusCode == 401 && onRefresh != null && !skipRefresh) {
         final ok = await _refreshOnce();
-        if (ok) response = await request().timeout(const Duration(seconds: 8));
+        if (ok) response = await request().timeout(timeout);
       }
       return response;
     } on TimeoutException {

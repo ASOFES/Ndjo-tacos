@@ -6,6 +6,28 @@ import { PrismaService } from '../prisma.service';
 export class StockService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async availableByProduct(
+    establishmentId: string,
+    productIds: string[],
+    tx: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    const available = new Map<string, number>();
+    if (!productIds.length) return available;
+    const lots = await tx.lot.findMany({
+      where: {
+        establishmentId,
+        productId: { in: productIds },
+        status: 'ACTIF',
+      },
+      select: { productId: true, qtyCurrent: true },
+    });
+    for (const lot of lots) {
+      if (lot.qtyCurrent <= 0) continue;
+      available.set(lot.productId, (available.get(lot.productId) ?? 0) + lot.qtyCurrent);
+    }
+    return available;
+  }
+
   async consumeFefo(params: {
     productId: string;
     establishmentId: string;

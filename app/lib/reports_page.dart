@@ -102,6 +102,23 @@ class _ReportsPageState extends State<ReportsPage> {
           '${data['period']} · ${data['from']?.toString().split('T').first} → ${data['to']?.toString().split('T').first}',
           style: const TextStyle(color: NdjoColors.muted),
         ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            const Text('Ventes', style: TextStyle(fontWeight: FontWeight.w700)),
+            ndjoExportButtons(
+              onExcel: () => downloadNdjoExport(context, widget.session, kind: 'sales', format: 'xls', period: period),
+              onPdf: () => downloadNdjoExport(context, widget.session, kind: 'sales', format: 'pdf', period: period),
+            ),
+            const Text('Rapport', style: TextStyle(fontWeight: FontWeight.w700)),
+            ndjoExportButtons(
+              onExcel: () => downloadNdjoExport(context, widget.session, kind: 'reports', format: 'xls', period: period),
+              onPdf: () => downloadNdjoExport(context, widget.session, kind: 'reports', format: 'pdf', period: period),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         SegmentedButton<String>(
           segments: const [

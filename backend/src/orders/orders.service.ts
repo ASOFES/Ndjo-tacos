@@ -15,6 +15,28 @@ export function isDrinkCategory(name?: string | null) {
   return normalized.includes('boisson');
 }
 
+export type StockShortage = {
+  productId: string;
+  name: string;
+  dish: string;
+  needed: number;
+  available: number;
+};
+
+type SaleLine = { productId: string; quantity: number; name?: string };
+type SaleProduct = Prisma.ProductGetPayload<{
+  include: {
+    category: true;
+    recipe: { include: { items: { include: { ingredient: true } } } };
+  };
+}>;
+
+function formatNeedQty(value: number) {
+  const rounded = Math.round(value * 1000) / 1000;
+  if (Math.abs(rounded - Math.round(rounded)) < 0.0001) return String(Math.round(rounded));
+  return String(rounded);
+}
+
 const orderInclude = {
   items: true,
   payments: true,
@@ -66,6 +88,15 @@ export class OrdersService {
     }
     if (!items.length) throw new BadRequestException('Panier vide');
 
+    const actor = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    const fromClient = actor?.role === 'CLIENT';
+    if (!fromClient) {
+      await this.assertStockOrThrow(body.establishmentId, items);
+    }
+
     if (body.customerName && body.customerPhone) {
       await this.customers.ensureCustomer({
         establishmentId: body.establishmentId,
@@ -111,11 +142,6 @@ export class OrdersService {
       const total =
         lines.reduce((sum, line) => sum + line.lineTotal, 0) + deliveryFee;
       const number = await this.stock.nextNumber(tx, 'NDJ');
-      const actor = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { role: true },
-      });
-      const fromClient = actor?.role === 'CLIENT';
       const hasKitchen = lines.some((line) => !drinkIds.has(line.productId));
       const created = await tx.order.create({
         data: {
@@ -193,6 +219,148 @@ export class OrdersService {
     return order;
   }
 
+  formatShortages(shortages: StockShortage[], orderNumber?: string) {
+    const prefix = orderNumber
+      ? `Commande ${orderNumber} : produit en carence — `
+      : 'Produit en carence — ';
+    return (
+      prefix +
+      shortages
+        .map((row) => {
+          const qty = `besoin ${formatNeedQty(row.needed)}, stock ${formatNeedQty(row.available)}`;
+          if (row.dish && row.dish !== row.name) {
+            return `${row.dish} (${row.name} : ${qty})`;
+          }
+          return `${row.name} (${qty})`;
+        })
+        .join(' · ')
+    );
+  }
+
+  async analyzeStock(
+    establishmentId: string,
+    lines: SaleLine[],
+    tx: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    const productIds = [...new Set(lines.map((line) => line.productId))];
+    const products = await this.loadSaleCatalog(productIds, tx);
+    const stockIds = this.stockProductIds(lines, products);
+    const available = await this.stock.availableByProduct(establishmentId, stockIds, tx);
+    return this.shortagesFromCatalog(lines, products, available);
+  }
+
+  async assertStockOrThrow(
+    establishmentId: string,
+    lines: SaleLine[],
+    orderNumber?: string,
+    tx: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    const shortages = await this.analyzeStock(establishmentId, lines, tx);
+    if (shortages.length) {
+      throw new BadRequestException(this.formatShortages(shortages, orderNumber));
+    }
+    return shortages;
+  }
+
+  async withCashierStock<
+    T extends {
+      id: string;
+      status: string;
+      number: string;
+      items: SaleLine[];
+    },
+  >(orders: T[], establishmentId: string) {
+    const waiting = orders.filter((order) => order.status === 'EN_CAISSE');
+    if (!waiting.length) return orders;
+    const productIds = [
+      ...new Set(waiting.flatMap((order) => order.items.map((item) => item.productId))),
+    ];
+    const products = await this.loadSaleCatalog(productIds);
+    const stockIds = this.stockProductIds(
+      waiting.flatMap((order) => order.items),
+      products,
+    );
+    const available = await this.stock.availableByProduct(establishmentId, stockIds);
+    return orders.map((order) => {
+      if (order.status !== 'EN_CAISSE') return order;
+      const shortages = this.shortagesFromCatalog(order.items, products, available);
+      return {
+        ...order,
+        stockShortages: shortages,
+        stockShortageMessage: shortages.length
+          ? this.formatShortages(shortages, order.number)
+          : '',
+      };
+    });
+  }
+
+  private async loadSaleCatalog(
+    productIds: string[],
+    tx: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    if (!productIds.length) return new Map<string, SaleProduct>();
+    const rows = await tx.product.findMany({
+      where: { id: { in: productIds } },
+      include: {
+        category: true,
+        recipe: { include: { items: { include: { ingredient: true } } } },
+      },
+    });
+    return new Map(rows.map((row) => [row.id, row]));
+  }
+
+  private stockProductIds(lines: SaleLine[], products: Map<string, SaleProduct>) {
+    const ids = new Set<string>();
+    for (const line of lines) {
+      const product = products.get(line.productId);
+      if (!product) continue;
+      if (isDrinkCategory(product.category?.name) || !product.recipe?.items?.length) {
+        ids.add(product.id);
+      } else {
+        for (const item of product.recipe.items) ids.add(item.ingredientId);
+      }
+    }
+    return [...ids];
+  }
+
+  private shortagesFromCatalog(
+    lines: SaleLine[],
+    products: Map<string, SaleProduct>,
+    available: Map<string, number>,
+  ): StockShortage[] {
+    const needs: StockShortage[] = [];
+    const add = (productId: string, name: string, dish: string, qty: number) => {
+      const existing = needs.find((row) => row.productId === productId && row.dish === dish);
+      if (existing) {
+        existing.needed += qty;
+        return;
+      }
+      needs.push({
+        productId,
+        name,
+        dish,
+        needed: qty,
+        available: available.get(productId) ?? 0,
+      });
+    };
+    for (const line of lines) {
+      const product = products.get(line.productId);
+      if (!product) continue;
+      const qty = Number(line.quantity);
+      const dish = product.name;
+      if (isDrinkCategory(product.category?.name)) {
+        add(product.id, product.name, dish, qty);
+      } else if (product.recipe?.items?.length) {
+        for (const item of product.recipe.items) {
+          add(item.ingredientId, item.ingredient.name, dish, item.quantity * qty);
+        }
+      } else {
+        add(product.id, product.name, dish, qty);
+      }
+    }
+    return needs.filter((row) => row.available + 0.0001 < row.needed);
+  }
+
   async consumeCounterDrinks(orderId: string, userId: string) {
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
@@ -200,6 +368,7 @@ export class OrdersService {
         include: { items: true },
       });
       if (!order) throw new BadRequestException('Commande introuvable');
+      await this.assertStockOrThrow(order.establishmentId, order.items, order.number, tx);
       const products = await tx.product.findMany({
         where: { id: { in: order.items.map((item) => item.productId) } },
         include: { category: true },

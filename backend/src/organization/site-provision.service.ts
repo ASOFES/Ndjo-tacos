@@ -10,10 +10,63 @@ export class SiteProvisionService {
     const destId = String(establishmentId ?? '').trim();
     if (!destId) return;
     const existing = await this.prisma.product.count({ where: { establishmentId: destId } });
+    if (existing === 0) {
+      const sourceId = await this.pickSource(destId);
+      if (sourceId) await this.cloneFrom(sourceId, destId);
+    }
+    await this.ensureSuppliers(destId);
+  }
+
+  async ensureSuppliers(destId: string) {
+    const existing = await this.prisma.supplier.count({ where: { establishmentId: destId } });
     if (existing > 0) return;
-    const sourceId = await this.pickSource(destId);
-    if (!sourceId) return;
-    await this.cloneFrom(sourceId, destId);
+    const rows = await this.prisma.supplier.groupBy({
+      by: ['establishmentId'],
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
+    });
+    const sourceId =
+      rows.find((row) => row.establishmentId !== destId && row._count.id > 0)?.establishmentId ?? null;
+    if (sourceId) {
+      const suppliers = await this.prisma.supplier.findMany({ where: { establishmentId: sourceId } });
+      for (const supplier of suppliers) {
+        try {
+          await this.prisma.supplier.create({
+            data: {
+              name: supplier.name,
+              phone: supplier.phone,
+              email: supplier.email,
+              address: supplier.address,
+              status: supplier.status,
+              notes: supplier.notes,
+              establishmentId: destId,
+            },
+          });
+        } catch (error) {
+          if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
+            throw error;
+          }
+        }
+      }
+    }
+    const leftover = await this.prisma.supplier.count({ where: { establishmentId: destId } });
+    if (leftover > 0) return;
+    const products = await this.prisma.product.findMany({
+      where: { establishmentId: destId, supplier: { not: null } },
+      select: { supplier: true },
+    });
+    const names = [...new Set(products.map((row) => row.supplier?.trim()).filter(Boolean) as string[])];
+    for (const name of names) {
+      try {
+        await this.prisma.supplier.create({
+          data: { name, establishmentId: destId, status: 'ACTIF' },
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
+          throw error;
+        }
+      }
+    }
   }
 
   private async pickSource(destId: string) {
@@ -138,6 +191,27 @@ export class SiteProvisionService {
               code: zone.code,
               fee: zone.fee,
               status: zone.status,
+              establishmentId: destId,
+            },
+          });
+        } catch (error) {
+          if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
+            throw error;
+          }
+        }
+      }
+
+      const suppliers = await tx.supplier.findMany({ where: { establishmentId: sourceId } });
+      for (const supplier of suppliers) {
+        try {
+          await tx.supplier.create({
+            data: {
+              name: supplier.name,
+              phone: supplier.phone,
+              email: supplier.email,
+              address: supplier.address,
+              status: supplier.status,
+              notes: supplier.notes,
               establishmentId: destId,
             },
           });

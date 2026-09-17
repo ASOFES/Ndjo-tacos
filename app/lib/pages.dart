@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'export_file.dart';
 import 'session.dart';
 import 'theme.dart';
 
@@ -33,6 +34,119 @@ String orderItemsLine(Map<String, dynamic> order) {
   }).join(', ');
 }
 
+String orderShortageMessage(Map<String, dynamic> order) {
+  final message = order['stockShortageMessage']?.toString().trim() ?? '';
+  if (message.isNotEmpty) return message;
+  final rows = order['stockShortages'] as List<dynamic>? ?? [];
+  if (rows.isEmpty) return '';
+  final number = order['number']?.toString() ?? '';
+  final lines = rows.map((item) {
+    final map = item is Map ? Map<String, dynamic>.from(item) : <String, dynamic>{};
+    final dish = map['dish']?.toString() ?? '';
+    final name = map['name']?.toString() ?? 'Produit';
+    final needed = map['needed'];
+    final available = map['available'];
+    final qty = 'besoin $needed, stock $available';
+    if (dish.isNotEmpty && dish != name) return '$dish ($name : $qty)';
+    return '$name ($qty)';
+  }).join(' · ');
+  return number.isEmpty ? 'Produit en carence — $lines' : 'Commande $number : produit en carence — $lines';
+}
+
+bool isStockShortageMessage(String message) {
+  final lower = message.toLowerCase();
+  return lower.contains('carence') || lower.contains('stock insuffisant');
+}
+
+Future<void> showStockShortageNotice(BuildContext context, String message) {
+  return showDialog<void>(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        title: const Text('Produit en carence'),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: FilledButton.styleFrom(backgroundColor: NdjoColors.primary),
+            child: const Text('OK'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> showCashierError(BuildContext context, Object error) async {
+  final message = error.toString();
+  if (isStockShortageMessage(message)) {
+    await showStockShortageNotice(context, message);
+    return;
+  }
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+}
+
+Widget ndjoExportButtons({
+  required VoidCallback onExcel,
+  required VoidCallback onPdf,
+}) {
+  return Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: [
+      OutlinedButton.icon(
+        onPressed: onExcel,
+        icon: const Icon(Icons.table_view_outlined, size: 18),
+        label: const Text('Excel'),
+      ),
+      OutlinedButton.icon(
+        onPressed: onPdf,
+        icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+        label: const Text('PDF'),
+      ),
+    ],
+  );
+}
+
+Future<void> downloadNdjoExport(
+  BuildContext context,
+  Session session, {
+  required String kind,
+  required String format,
+  String? period,
+}) async {
+  final id = session.establishmentId ?? '';
+  final query = [
+    if (id.isNotEmpty) 'establishmentId=$id',
+    if (period != null && period.isNotEmpty) 'period=$period',
+  ].join('&');
+  try {
+    final file = await session.api.getFile('/export/$kind/$format${query.isEmpty ? '' : '?$query'}');
+    final saved = await saveNdjoFile(file.name, file.bytes, file.mime);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Extraction enregistrée : $saved')));
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+  }
+}
+
+String transferStatusLabel(String status) {
+  switch (status) {
+    case 'CREE':
+      return 'À expédier';
+    case 'EN_TRANSIT':
+      return 'En transit — réception à valider';
+    case 'RECU':
+      return 'Réception validée';
+    case 'ANNULE':
+      return 'Annulé';
+    default:
+      return status;
+  }
+}
+
 Widget cashierClientInbox({
   required List<dynamic> orders,
   required Future<void> Function(String id) onSend,
@@ -50,7 +164,9 @@ Widget cashierClientInbox({
       const Text('Payées ou non : la cuisine ne les voit qu’après validation caisse.', style: TextStyle(color: NdjoColors.muted, fontSize: 12)),
       const SizedBox(height: 8),
       ...waiting.map((order) {
+        final shortage = orderShortageMessage(order);
         return Card(
+          color: shortage.isEmpty ? null : const Color(0xFFFFEBEE),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Column(
@@ -62,6 +178,11 @@ Widget cashierClientInbox({
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(orderItemsLine(order), style: const TextStyle(color: NdjoColors.muted)),
+                  ),
+                if (shortage.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(shortage, style: const TextStyle(color: Color(0xFFB71C1C), fontWeight: FontWeight.w700)),
                   ),
                 const SizedBox(height: 8),
                 Wrap(

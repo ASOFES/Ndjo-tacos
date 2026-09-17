@@ -1,0 +1,13 @@
+NDJO TACOS — Android (n'importe quel telephone)
+
+1. Copiez NDJO-TACOS.apk sur le telephone (USB, WhatsApp, Drive...)
+2. Ouvrez le fichier APK
+3. Autorisez "Sources inconnues" / "Installer des applis inconnues" si demande
+4. Installez, puis ouvrez NDJO TACOS
+5. Autorisez Internet (et GPS pour le livreur)
+
+Fonctionne sur telephones et tablettes Android 5 et plus
+(ARM 32 bits, ARM 64 bits, et quelques x86).
+
+L'application se connecte a l'API :
+https://ndjo-tacos-production.up.railway.app

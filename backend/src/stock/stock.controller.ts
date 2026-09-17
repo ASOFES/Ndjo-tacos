@@ -137,26 +137,55 @@ export class StockController {
   @Post('transfers')
   @RequirePermission('stock.transfert')
   async transfer(@Body() body: any, @Req() req: AuthedRequest & { user: { sub: string } }) {
-    assertSameEstablishment(body.sourceId, req);
-    if (!body.destId || body.destId === body.sourceId) {
+    const sourceId = req.scopedEstablishmentId ?? body.sourceId ?? body.establishmentId;
+    assertSameEstablishment(sourceId, req);
+    if (!body.destId || body.destId === sourceId) {
       throw new BadRequestException('Établissement destination invalide');
     }
-    if (!body.productId || Number(body.quantity) <= 0) {
+    const quantity = Number(body.quantity);
+    if (!body.productId || !Number.isFinite(quantity) || quantity <= 0) {
       throw new BadRequestException('Produit et quantité requis');
     }
+    const dest = await this.prisma.establishment.findUnique({ where: { id: body.destId } });
+    if (!dest) throw new BadRequestException('Établissement destination introuvable');
+    const product = mustExist(
+      await this.prisma.product.findUnique({ where: { id: body.productId } }),
+      'Produit introuvable',
+    );
+    if (product.establishmentId !== sourceId) {
+      throw new BadRequestException('Produit hors établissement source');
+    }
+    const available = await this.stock.availableByProduct(sourceId, [product.id]);
+    const stockQty = available.get(product.id) ?? 0;
+    if (stockQty + 0.0001 < quantity) {
+      throw new BadRequestException(
+        `Stock insuffisant pour transférer ${product.name} (besoin ${quantity}, stock ${stockQty})`,
+      );
+    }
     const number = await this.stock.nextNumber(this.prisma, 'TRF');
-    return this.prisma.transfer.create({
+    const created = await this.prisma.transfer.create({
       data: {
         number,
-        sourceId: body.sourceId,
+        sourceId,
         destId: body.destId,
-        productId: body.productId,
+        productId: product.id,
         lotId: body.lotId,
-        quantity: Number(body.quantity),
+        quantity,
         status: 'CREE',
       },
       include: { source: true, dest: true, product: true },
     });
+    await this.prisma.auditLog.create({
+      data: {
+        userId: req.user.sub,
+        action: 'CREER',
+        entity: 'TRANSFERT',
+        entityId: created.id,
+        details: `${created.number} · ${product.name} · ${quantity} · ${created.source.name} → ${created.dest.name}`,
+        establishmentId: sourceId,
+      },
+    });
+    return created;
   }
 
   @Post('transfers/:id/ship')
@@ -166,10 +195,14 @@ export class StockController {
     @Req() req: AuthedRequest & { user: { sub: string } },
   ) {
     const transfer = mustExist(
-      await this.prisma.transfer.findUnique({ where: { id }, include: { product: true } }),
+      await this.prisma.transfer.findUnique({
+        where: { id },
+        include: { product: true, source: true, dest: true },
+      }),
       'Transfert introuvable',
     );
     assertSameEstablishment(transfer.sourceId, req);
+    if (transfer.status === 'ANNULE') throw new BadRequestException('Transfert annulé');
     if (transfer.status === 'RECU') throw new BadRequestException('Transfert déjà reçu');
     if (transfer.status === 'EN_TRANSIT') {
       throw new BadRequestException('Transfert déjà expédié');
@@ -200,15 +233,44 @@ export class StockController {
       data: { status: 'EN_TRANSIT', shippedAt: transfer.shippedAt ?? new Date() },
       include: { source: true, dest: true, product: true },
     });
+    await this.prisma.auditLog.create({
+      data: {
+        userId: req.user.sub,
+        action: 'EXPEDIER',
+        entity: 'TRANSFERT',
+        entityId: updated.id,
+        details: `${updated.number} expédié · ${transfer.product.name} · ${transfer.quantity} · en attente de réception à ${transfer.dest.name}`,
+        oldValue: 'CREE',
+        newValue: 'EN_TRANSIT',
+        establishmentId: transfer.sourceId,
+      },
+    });
     return { ...updated, sourceLots: lots };
   }
 
   @Post('transfers/:id/status')
   @RequirePermission('stock.transfert')
-  transferStatus(@Param('id') id: string, @Body() body: { status: string }) {
+  async transferStatus(
+    @Param('id') id: string,
+    @Body() body: { status: string },
+    @Req() req: AuthedRequest & { user: { sub: string } },
+  ) {
+    const transfer = mustExist(
+      await this.prisma.transfer.findUnique({ where: { id } }),
+      'Transfert introuvable',
+    );
+    if (body.status !== 'ANNULE') {
+      throw new BadRequestException(
+        'Le stock destination n’entre qu’après validation de réception',
+      );
+    }
+    assertSameEstablishment(transfer.sourceId, req);
+    if (transfer.status !== 'CREE') {
+      throw new BadRequestException('Seul un transfert non expédié peut être annulé');
+    }
     return this.prisma.transfer.update({
       where: { id },
-      data: { status: body.status },
+      data: { status: 'ANNULE' },
       include: { source: true, dest: true, product: true },
     });
   }
@@ -217,16 +279,21 @@ export class StockController {
   @RequirePermission('stock.transfert', 'stock.entree')
   async receiveTransfer(
     @Param('id') id: string,
-    @Body() body: { expiryDate?: string; location?: string },
+    @Body() body: { expiryDate?: string; location?: string; establishmentId?: string },
     @Req() req: AuthedRequest & { user: { sub: string } },
   ) {
     const transfer = mustExist(
-      await this.prisma.transfer.findUnique({ where: { id } }),
+      await this.prisma.transfer.findUnique({
+        where: { id },
+        include: { product: true, source: true, dest: true },
+      }),
       'Transfert introuvable',
     );
+    assertSameEstablishment(transfer.destId, req);
     if (transfer.status === 'RECU') throw new BadRequestException('Transfert déjà reçu');
+    if (transfer.status === 'ANNULE') throw new BadRequestException('Transfert annulé');
     if (transfer.status !== 'EN_TRANSIT') {
-      throw new BadRequestException('Le transfert doit être expédié avant réception');
+      throw new BadRequestException('Le transfert doit être expédié avant validation de réception');
     }
     const sourceProduct = mustExist(
       await this.prisma.product.findUnique({ where: { id: transfer.productId } }),
@@ -260,21 +327,70 @@ export class StockController {
         },
       });
     }
-    const lot = await this.stock.receiveLot({
-      productId: destProduct.id,
-      establishmentId: transfer.destId,
-      quantity: transfer.quantity,
-      priceBuy: sourceProduct.priceBuy,
-      expiryDate: body.expiryDate,
-      location: body.location ?? 'Dépôt destination',
-      motif: `Réception transfert ${transfer.number}`,
-      userId: req.user.sub,
+    const alreadyIn = await this.prisma.stockMovement.findFirst({
+      where: {
+        establishmentId: transfer.destId,
+        productId: destProduct.id,
+        type: 'ENTREE',
+        motif: { contains: transfer.number },
+      },
     });
-    return this.prisma.transfer.update({
+    const shipped = await this.prisma.stockMovement.findMany({
+      where: {
+        establishmentId: transfer.sourceId,
+        type: 'TRANSFERT',
+        motif: { contains: transfer.number },
+      },
+      include: { lot: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    let lastLotId = transfer.lotId;
+    if (!alreadyIn) {
+      const chunks = shipped.length
+        ? shipped.map((move) => ({
+            quantity: move.quantity,
+            priceBuy: move.lot?.priceBuy ?? sourceProduct.priceBuy,
+            expiryDate: move.lot?.expiryDate ?? body.expiryDate ?? null,
+          }))
+        : [
+            {
+              quantity: transfer.quantity,
+              priceBuy: sourceProduct.priceBuy,
+              expiryDate: body.expiryDate ?? null,
+            },
+          ];
+      for (const chunk of chunks) {
+        const lot = await this.stock.receiveLot({
+          productId: destProduct.id,
+          establishmentId: transfer.destId,
+          quantity: chunk.quantity,
+          priceBuy: chunk.priceBuy,
+          expiryDate: chunk.expiryDate,
+          location: body.location ?? `Transfert ${transfer.source.name}`,
+          motif: `Réception transfert ${transfer.number}`,
+          userId: req.user.sub,
+        });
+        lastLotId = lot.id;
+      }
+    }
+    const updated = await this.prisma.transfer.update({
       where: { id },
-      data: { status: 'RECU', lotId: lot.id, receivedAt: new Date() },
+      data: { status: 'RECU', lotId: lastLotId, receivedAt: new Date() },
       include: { source: true, dest: true, product: true },
     });
+    await this.prisma.auditLog.create({
+      data: {
+        userId: req.user.sub,
+        action: 'RECEPTION',
+        entity: 'TRANSFERT',
+        entityId: updated.id,
+        details: `${updated.number} réception validée · ${sourceProduct.name} · ${transfer.quantity} · ${transfer.source.name} → ${transfer.dest.name}`,
+        oldValue: 'EN_TRANSIT',
+        newValue: 'RECU',
+        establishmentId: transfer.destId,
+      },
+    });
+    return updated;
   }
 
   private async ensureDestCategory(sourceCategoryId: string, destId: string) {

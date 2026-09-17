@@ -191,6 +191,10 @@ class _CatalogPageState extends State<CatalogPage> {
                       runSpacing: 8,
                       children: [
                         OutlinedButton.icon(onPressed: () => _edit(), icon: const Icon(Icons.add), label: const Text('Ajouter un produit')),
+                        ndjoExportButtons(
+                          onExcel: () => downloadNdjoExport(context, widget.session, kind: 'catalog', format: 'xls'),
+                          onPdf: () => downloadNdjoExport(context, widget.session, kind: 'catalog', format: 'pdf'),
+                        ),
                         FilledButton.icon(
                           onPressed: _publish,
                           icon: const Icon(Icons.publish),
@@ -214,6 +218,11 @@ class _CatalogPageState extends State<CatalogPage> {
                     ),
                   ),
                   OutlinedButton.icon(onPressed: () => _edit(), icon: const Icon(Icons.add), label: const Text('Ajouter un produit')),
+                  const SizedBox(width: 8),
+                  ndjoExportButtons(
+                    onExcel: () => downloadNdjoExport(context, widget.session, kind: 'catalog', format: 'xls'),
+                    onPdf: () => downloadNdjoExport(context, widget.session, kind: 'catalog', format: 'pdf'),
+                  ),
                   const SizedBox(width: 8),
                   FilledButton.icon(
                     onPressed: _publish,

@@ -576,14 +576,22 @@ class _StockPageState extends State<StockPage> {
   }
 
   Future<void> _createTransfer() async {
-    final movable = products.where((item) => item['kind'] == 'INGREDIENT' || (item['stockQty'] ?? 0) > 0).toList();
-    if (movable.isEmpty) return;
+    final movable = products.where((item) => ((item['stockQty'] as num?) ?? 0) > 0).toList();
+    if (movable.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Aucun produit en stock à transférer.')));
+      return;
+    }
     var places = widget.session.establishments;
     if (places.isEmpty) {
       places = await widget.session.api.getList('/public/establishments');
     }
     final dests = places.where((item) => item['id'] != _id).toList();
-    if (dests.isEmpty) return;
+    if (dests.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Aucun autre établissement pour recevoir le transfert.')));
+      return;
+    }
     String productId = movable.first['id'].toString();
     String destId = dests.first['id'].toString();
     final qty = TextEditingController(text: '1');
@@ -592,23 +600,30 @@ class _StockPageState extends State<StockPage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
           title: const Text('Nouveau transfert'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: productId,
-                items: movable.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text('${item['name']} (${item['stockQty']})'))).toList(),
-                onChanged: (value) => setLocal(() => productId = value ?? productId),
-                decoration: const InputDecoration(labelText: 'Produit source'),
-              ),
-              DropdownButtonFormField<String>(
-                value: destId,
-                items: dests.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text(item['name'].toString()))).toList(),
-                onChanged: (value) => setLocal(() => destId = value ?? destId),
-                decoration: const InputDecoration(labelText: 'Destination'),
-              ),
-              TextField(controller: qty, decoration: const InputDecoration(labelText: 'Quantité')),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Le stock sortira à l’expédition. Il n’entrera à destination qu’après validation de réception.',
+                  style: TextStyle(color: NdjoColors.muted, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: productId,
+                  items: movable.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text('${item['name']} (${item['stockQty']})'))).toList(),
+                  onChanged: (value) => setLocal(() => productId = value ?? productId),
+                  decoration: const InputDecoration(labelText: 'Produit source'),
+                ),
+                DropdownButtonFormField<String>(
+                  value: destId,
+                  items: dests.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text(item['name'].toString()))).toList(),
+                  onChanged: (value) => setLocal(() => destId = value ?? destId),
+                  decoration: const InputDecoration(labelText: 'Destination'),
+                ),
+                TextField(controller: qty, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantité')),
+              ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
@@ -618,15 +633,80 @@ class _StockPageState extends State<StockPage> {
       ),
     );
     if (ok != true) return;
+    if (_id.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choisissez un établissement avant de transférer.')),
+      );
+      return;
+    }
     try {
       await widget.session.api.post('/stock/transfers', {
+        'establishmentId': _id,
         'sourceId': _id,
         'destId': destId,
         'productId': productId,
         'quantity': num.parse(qty.text),
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transfert créé. Expédier pour sortir le stock source.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Transfert créé. Expédiez pour sortir le stock. La destination validera la réception.')),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  Future<void> _shipTransfer(Map<String, dynamic> map) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Expédier le transfert'),
+        content: Text(
+          'Sortir ${map['quantity']} ${map['product']?['name'] ?? 'produit'} vers ${map['dest']?['name'] ?? 'la destination'} ?\nLe stock quitte cet établissement. Il n’entrera à destination qu’après validation de réception.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Expédier')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.session.api.post('/stock/transfers/${map['id']}/ship', {'establishmentId': _id});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Expédié. En attente de validation de réception à destination.')));
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  Future<void> _receiveTransfer(Map<String, dynamic> map) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Valider la réception'),
+        content: Text(
+          'Confirmer l’entrée de ${map['quantity']} ${map['product']?['name'] ?? 'produit'} envoyé(s) par ${map['source']?['name'] ?? 'l’autre établissement'} ?\nLe stock n’est ajouté ici qu’après cette validation.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Valider la réception')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.session.api.post('/stock/transfers/${map['id']}/receive', {
+        'establishmentId': _id,
+        'location': 'Dépôt principal',
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Réception validée. Le stock est entré dans cet établissement.')));
       await _load();
     } catch (e) {
       if (!mounted) return;
@@ -638,22 +718,129 @@ class _StockPageState extends State<StockPage> {
   Widget build(BuildContext context) {
     if (loading) return const Center(child: CircularProgressIndicator());
     if (error != null) return _Retry(error: error!, onRetry: _retry);
+    final compact = ndjoCompact(context);
+    final incoming = [
+      for (final item in transfers)
+        if (item is Map && item['destId']?.toString() == _id) Map<String, dynamic>.from(item),
+    ];
+    final pendingReceive = incoming.where((item) => item['status']?.toString() == 'EN_TRANSIT').toList();
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(compact ? 16 : 24),
       children: [
+        if (compact)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Stock & lots', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ndjoExportButtons(
+                    onExcel: () => downloadNdjoExport(context, widget.session, kind: 'stock', format: 'xls'),
+                    onPdf: () => downloadNdjoExport(context, widget.session, kind: 'stock', format: 'pdf'),
+                  ),
+                  OutlinedButton(onPressed: _exit, child: const Text('Sortie cuisine')),
+                  FilledButton(
+                    onPressed: _entry,
+                    style: FilledButton.styleFrom(backgroundColor: NdjoColors.primary),
+                    child: const Text('Entrée'),
+                  ),
+                ],
+              ),
+            ],
+          )
+        else
+          Row(
+            children: [
+              const Expanded(child: Text('Stock & lots', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold))),
+              ndjoExportButtons(
+                onExcel: () => downloadNdjoExport(context, widget.session, kind: 'stock', format: 'xls'),
+                onPdf: () => downloadNdjoExport(context, widget.session, kind: 'stock', format: 'pdf'),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(onPressed: _exit, child: const Text('Sortie cuisine')),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _entry,
+                style: FilledButton.styleFrom(backgroundColor: NdjoColors.primary),
+                child: const Text('Entrée'),
+              ),
+            ],
+          ),
+        if (pendingReceive.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Card(
+            color: const Color(0xFFFFEBEE),
+            child: ListTile(
+              leading: const Icon(Icons.inventory_2, color: Color(0xFFB71C1C)),
+              title: Text('${pendingReceive.length} transfert(s) à valider à la réception'),
+              subtitle: const Text('Le stock n’entre dans cet établissement qu’après validation.'),
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
         Row(
           children: [
-            const Expanded(child: Text('Stock & lots', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold))),
-            OutlinedButton(onPressed: _exit, child: const Text('Sortie cuisine')),
-            const SizedBox(width: 8),
-            FilledButton(
-              onPressed: _entry,
-              style: FilledButton.styleFrom(backgroundColor: NdjoColors.primary),
-              child: const Text('Entrée'),
-            ),
+            const Expanded(child: Text('Transferts', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+            TextButton(onPressed: _createTransfer, child: const Text('Nouveau transfert')),
           ],
         ),
-        const SizedBox(height: 16),
+        const Text(
+          'Source : créer puis expédier. Destination : valider la réception pour entrer le stock.',
+          style: TextStyle(color: NdjoColors.muted, fontSize: 12),
+        ),
+        const SizedBox(height: 8),
+        if (transfers.isEmpty)
+          const Text('Aucun transfert.', style: TextStyle(color: NdjoColors.muted))
+        else
+          ...transfers.map((item) {
+            final map = Map<String, dynamic>.from(item as Map);
+            final status = map['status']?.toString() ?? '';
+            final fromHere = map['sourceId']?.toString() == _id;
+            final toHere = map['destId']?.toString() == _id;
+            return Card(
+              color: status == 'EN_TRANSIT' && toHere ? const Color(0xFFFFEBEE) : null,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${map['number']} · ${transferStatusLabel(status)} · ${map['product']?['name'] ?? ''}',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    Text('${map['source']?['name'] ?? ''} → ${map['dest']?['name'] ?? ''} · ${map['quantity']}'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (fromHere && status == 'CREE')
+                          FilledButton(
+                            onPressed: () => _shipTransfer(map),
+                            style: FilledButton.styleFrom(backgroundColor: NdjoColors.primary),
+                            child: const Text('Expédier'),
+                          ),
+                        if (toHere && status == 'EN_TRANSIT')
+                          FilledButton(
+                            onPressed: () => _receiveTransfer(map),
+                            style: FilledButton.styleFrom(backgroundColor: NdjoColors.primary),
+                            child: const Text('Valider la réception'),
+                          ),
+                        if (fromHere && status == 'EN_TRANSIT')
+                          const Text('En attente de validation à destination', style: TextStyle(color: NdjoColors.muted)),
+                        if (status == 'RECU')
+                          const Text('Réception validée', style: TextStyle(color: NdjoColors.success)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        const SizedBox(height: 20),
         const Text('Niveaux', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
         ...products.map((item) {
           final map = Map<String, dynamic>.from(item as Map);
@@ -693,50 +880,6 @@ class _StockPageState extends State<StockPage> {
                 'Entrée $entry · Achat ${fc(map['priceBuy'] as num? ?? 0)} · Péremption ${map['expiryDate']?.toString().split('T').first ?? '—'}',
               ),
               trailing: Text('${map['qtyCurrent']} / ${map['qtyInitial']}'),
-            ),
-          );
-        }),
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            const Expanded(child: Text('Transferts', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
-            TextButton(onPressed: _createTransfer, child: const Text('Nouveau transfert')),
-          ],
-        ),
-        ...transfers.map((item) {
-          final map = item as Map<String, dynamic>;
-          final status = map['status']?.toString() ?? '';
-          return Card(
-            child: ListTile(
-              title: Text('${map['number']} · $status · ${map['product']?['name'] ?? ''}'),
-              subtitle: Text('${map['source']?['name'] ?? ''} → ${map['dest']?['name'] ?? ''} · ${map['quantity']}'),
-              trailing: status == 'CREE'
-                  ? TextButton(
-                      onPressed: () async {
-                        try {
-                          await widget.session.api.post('/stock/transfers/${map['id']}/ship');
-                          await _load();
-                        } catch (e) {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-                        }
-                      },
-                      child: const Text('Expédier'),
-                    )
-                  : status == 'EN_TRANSIT'
-                      ? TextButton(
-                          onPressed: () async {
-                            try {
-                              await widget.session.api.post('/stock/transfers/${map['id']}/receive', {'location': 'Dépôt destination'});
-                              await _load();
-                            } catch (e) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-                            }
-                          },
-                          child: const Text('Réception dest.'),
-                        )
-                      : const Text('Reçu'),
             ),
           );
         }),
@@ -1052,7 +1195,7 @@ class _PosPageState extends State<PosPage> {
     await _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      await showCashierError(context, e);
     }
   }
 
@@ -1068,7 +1211,7 @@ class _PosPageState extends State<PosPage> {
       await _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      await showCashierError(context, e);
     }
   }
 
@@ -1092,6 +1235,10 @@ class _PosPageState extends State<PosPage> {
     final compact = ndjoCompact(context);
     final menu = [
                     const Text('Caisse', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+                    ndjoExportButtons(
+                      onExcel: () => downloadNdjoExport(context, widget.session, kind: 'sales', format: 'xls', period: 'jour'),
+                      onPdf: () => downloadNdjoExport(context, widget.session, kind: 'sales', format: 'pdf', period: 'jour'),
+                    ),
               cashierClientInbox(
                 orders: orders,
                 onSend: _sendToKitchen,

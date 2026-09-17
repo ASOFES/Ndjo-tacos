@@ -20,6 +20,8 @@ backend/scripts/.menu-offline-edge-profile*/
 backend/scripts/.offline-edge-profile*/
 backend/scripts/menu-offline-shots/
 
+releases/
+
 *.db
 *.db-journal
 *.log
