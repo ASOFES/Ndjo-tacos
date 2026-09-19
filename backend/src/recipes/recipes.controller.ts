@@ -4,6 +4,7 @@ import { JwtGuard } from '../auth/jwt.guard';
 import { AccessGuard } from '../auth/access.guard';
 import { RequirePermission } from '../auth/require-permission.decorator';
 import { CatalogService } from '../catalog/catalog.service';
+import { assertRecipeItemsValid } from '../orders/recipe.expand';
 
 @Controller('recipes')
 @UseGuards(JwtGuard, AccessGuard)
@@ -36,6 +37,11 @@ export class RecipesController {
     },
     @Req() req: { user: { sub: string } },
   ) {
+    await assertRecipeItemsValid(this.prisma, {
+      establishmentId: body.establishmentId,
+      productId: body.productId,
+      items: body.items ?? [],
+    });
     const recipe = await this.prisma.recipe.upsert({
       where: { productId: body.productId },
       update: {

@@ -83,17 +83,29 @@ export class CatalogService {
         quantity: number;
         unit: string;
         ingredientId?: string;
-        ingredient: { id?: string; name: string; code?: string; priceBuy?: number };
+        ingredient: {
+          id?: string;
+          name: string;
+          code?: string;
+          kind?: string;
+          priceBuy?: number;
+          priceSell?: number;
+        };
       }) => {
         const grams = item.unit === 'kg';
         const displayQty = grams
           ? `${Math.round(item.quantity * 1000)} g`
           : `${item.quantity} ${item.unit}`;
-        const cost = Math.round((item.ingredient.priceBuy ?? 0) * item.quantity);
+        const unitCost =
+          item.ingredient.kind === 'VENTE'
+            ? (item.ingredient.priceBuy ?? item.ingredient.priceSell ?? 0)
+            : (item.ingredient.priceBuy ?? 0);
+        const cost = Math.round(unitCost * item.quantity);
         return {
           ingredientId: item.ingredientId ?? item.ingredient.id,
           name: item.ingredient.name,
           code: item.ingredient.code,
+          kind: item.ingredient.kind ?? 'INGREDIENT',
           quantity: item.quantity,
           qtyShown: grams ? Math.round(item.quantity * 1000) : item.quantity,
           unit: item.unit,

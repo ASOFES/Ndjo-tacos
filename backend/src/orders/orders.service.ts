@@ -7,6 +7,7 @@ import { WhatsAppService } from '../notifications/whatsapp.service';
 import { CustomersService } from '../customers/customers.service';
 import { createTrackingToken } from '../tracking/token';
 import { resolveDiscount } from './discount.rules';
+import { expandRecipeLeaves } from './recipe.expand';
 import * as bcrypt from 'bcryptjs';
 
 export function isDrinkCategory(name?: string | null) {
@@ -351,9 +352,12 @@ export class OrdersService {
   ) {
     const productIds = [...new Set(lines.map((line) => line.productId))];
     const products = await this.loadSaleCatalog(productIds, tx);
-    const stockIds = this.stockProductIds(lines, products);
+    const needs = await this.expandedNeeds(lines, products, tx);
+    const stockIds = [...new Set(needs.map((row) => row.productId))];
     const available = await this.stock.availableByProduct(establishmentId, stockIds, tx);
-    return this.shortagesFromCatalog(lines, products, available);
+    return needs
+      .map((row) => ({ ...row, available: available.get(row.productId) ?? 0 }))
+      .filter((row) => row.available + 0.0001 < row.needed);
   }
 
   async assertStockOrThrow(
@@ -383,22 +387,28 @@ export class OrdersService {
       ...new Set(waiting.flatMap((order) => order.items.map((item) => item.productId))),
     ];
     const products = await this.loadSaleCatalog(productIds);
-    const stockIds = this.stockProductIds(
-      waiting.flatMap((order) => order.items),
-      products,
-    );
+    const allLines = waiting.flatMap((order) => order.items);
+    const needs = await this.expandedNeeds(allLines, products, this.prisma);
+    const stockIds = [...new Set(needs.map((row) => row.productId))];
     const available = await this.stock.availableByProduct(establishmentId, stockIds);
-    return orders.map((order) => {
-      if (order.status !== 'EN_CAISSE') return order;
-      const shortages = this.shortagesFromCatalog(order.items, products, available);
-      return {
+    const result: T[] = [];
+    for (const order of orders) {
+      if (order.status !== 'EN_CAISSE') {
+        result.push(order);
+        continue;
+      }
+      const shortages = (await this.expandedNeeds(order.items, products, this.prisma))
+        .map((row) => ({ ...row, available: available.get(row.productId) ?? 0 }))
+        .filter((row) => row.available + 0.0001 < row.needed);
+      result.push({
         ...order,
         stockShortages: shortages,
         stockShortageMessage: shortages.length
           ? this.formatShortages(shortages, order.number)
           : '',
-      };
-    });
+      });
+    }
+    return result;
   }
 
   private async loadSaleCatalog(
@@ -416,25 +426,11 @@ export class OrdersService {
     return new Map(rows.map((row) => [row.id, row]));
   }
 
-  private stockProductIds(lines: SaleLine[], products: Map<string, SaleProduct>) {
-    const ids = new Set<string>();
-    for (const line of lines) {
-      const product = products.get(line.productId);
-      if (!product) continue;
-      if (isDrinkCategory(product.category?.name) || !product.recipe?.items?.length) {
-        ids.add(product.id);
-      } else {
-        for (const item of product.recipe.items) ids.add(item.ingredientId);
-      }
-    }
-    return [...ids];
-  }
-
-  private shortagesFromCatalog(
+  private async expandedNeeds(
     lines: SaleLine[],
     products: Map<string, SaleProduct>,
-    available: Map<string, number>,
-  ): StockShortage[] {
+    tx: Prisma.TransactionClient | PrismaService,
+  ): Promise<StockShortage[]> {
     const needs: StockShortage[] = [];
     const add = (productId: string, name: string, dish: string, qty: number) => {
       const existing = needs.find((row) => row.productId === productId && row.dish === dish);
@@ -447,7 +443,7 @@ export class OrdersService {
         name,
         dish,
         needed: qty,
-        available: available.get(productId) ?? 0,
+        available: 0,
       });
     };
     for (const line of lines) {
@@ -455,17 +451,16 @@ export class OrdersService {
       if (!product) continue;
       const qty = Number(line.quantity);
       const dish = product.name;
-      if (isDrinkCategory(product.category?.name)) {
+      if (isDrinkCategory(product.category?.name) && !product.recipe?.items?.length) {
         add(product.id, product.name, dish, qty);
-      } else if (product.recipe?.items?.length) {
-        for (const item of product.recipe.items) {
-          add(item.ingredientId, item.ingredient.name, dish, item.quantity * qty);
-        }
-      } else {
-        add(product.id, product.name, dish, qty);
+        continue;
+      }
+      const leaves = await expandRecipeLeaves(tx, line.productId, qty);
+      for (const leaf of leaves) {
+        add(leaf.productId, leaf.name, dish, leaf.quantity);
       }
     }
-    return needs.filter((row) => row.available + 0.0001 < row.needed);
+    return needs;
   }
 
   async consumeCounterDrinks(orderId: string, userId: string) {

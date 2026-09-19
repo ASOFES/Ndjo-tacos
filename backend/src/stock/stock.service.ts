@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
+import { expandRecipeLeaves } from '../orders/recipe.expand';
 
 @Injectable()
 export class StockService {
@@ -171,13 +172,14 @@ export class StockService {
       }
       return [];
     }
+    const leaves = await expandRecipeLeaves(tx, params.productId, params.portions);
     const used: { number: string; quantity: number; entryDate: Date | null; priceBuy: number }[] = [];
-    for (const item of recipe.items) {
+    for (const leaf of leaves) {
       const result = await this.applyFefo(
         {
-          productId: item.ingredientId,
+          productId: leaf.productId,
           establishmentId: params.establishmentId,
-          quantity: item.quantity * params.portions,
+          quantity: leaf.quantity,
           userId: params.userId,
           type: 'CONSOMMATION',
           motif: `CMD:${params.orderNumber}:${params.productId}`,

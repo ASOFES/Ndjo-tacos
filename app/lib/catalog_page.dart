@@ -33,6 +33,7 @@ class _CatalogPageState extends State<CatalogPage> {
   List<dynamic> products = [];
   List<dynamic> categories = [];
   List<dynamic> ingredients = [];
+  List<dynamic> components = [];
   List<dynamic> published = [];
   String? publishedVersion;
   String? error;
@@ -65,7 +66,15 @@ class _CatalogPageState extends State<CatalogPage> {
     categories = widget.session.peekList('categories-$_id');
     ingredients = (store?.allCachedProducts() ?? []).where((item) => item is Map && item['kind']?.toString() == 'INGREDIENT').toList();
     if (ingredients.isEmpty) ingredients = widget.session.peekList('ingredients-$_id');
-    if (local.isNotEmpty && mounted) {
+    components = [
+      ...((store?.allCachedProducts() ?? []).where((item) => item is Map && item['status']?.toString() != 'SUPPRIME')),
+    ];
+    if (components.isEmpty) {
+      components = [
+        ...products,
+        ...ingredients,
+      ];
+    }    if (local.isNotEmpty && mounted) {
       setState(() {
         products = local;
         loading = false;
@@ -81,6 +90,7 @@ class _CatalogPageState extends State<CatalogPage> {
         widget.session.cachedList('/catalog/products?establishmentId=$_id$kindQuery', 'catalog-$_id-$kind'),
         widget.session.cachedList('/catalog/categories?establishmentId=$_id', 'categories-$_id'),
         widget.session.cachedList('/catalog/products?establishmentId=$_id&kind=INGREDIENT', 'ingredients-$_id'),
+        widget.session.cachedList('/catalog/products?establishmentId=$_id', 'catalog-$_id-TOUS'),
       ]);
       Map<String, dynamic> live = widget.session.peekMap('catalog-pub-$_id');
       try {
@@ -89,10 +99,19 @@ class _CatalogPageState extends State<CatalogPage> {
       if (!mounted) return;
       var next = loaded[0].isNotEmpty ? loaded[0] : local;
       if (next.isEmpty) next = store?.allCachedProducts() ?? [];
+      final allProducts = loaded[3].isNotEmpty
+          ? loaded[3]
+          : [
+              ...next,
+              ...loaded[2],
+            ];
       setState(() {
         products = next;
         categories = loaded[1].isNotEmpty ? loaded[1] : categories;
         ingredients = loaded[2].isNotEmpty ? loaded[2] : ingredients;
+        components = allProducts
+            .where((item) => item is Map && item['status']?.toString() != 'SUPPRIME')
+            .toList();
         published = (live['products'] as List<dynamic>?) ?? published;
         publishedVersion = live['version']?.toString() ?? publishedVersion;
         error = null;
@@ -103,6 +122,7 @@ class _CatalogPageState extends State<CatalogPage> {
       final fallback = store?.allCachedProducts() ?? products;
       setState(() {
         products = fallback.isNotEmpty ? fallback : products;
+        components = fallback.isNotEmpty ? fallback : components;
         error = null;
         loading = false;
       });
@@ -141,6 +161,7 @@ class _CatalogPageState extends State<CatalogPage> {
         establishmentId: _id,
         categories: categories,
         ingredients: ingredients,
+        components: components,
         product: current,
       ),
     );
@@ -494,17 +515,17 @@ class _ProductPreview extends StatelessWidget {
           const SizedBox(height: 18),
           Row(
             children: [
-              const Expanded(child: Text('Composition du Tacos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
+              const Expanded(child: Text('Composition / menu', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
               TextButton(onPressed: onEditComposition, child: const Text('Modifier')),
             ],
           ),
           const Text(
-            'Recette = ce qui constitue 1 unité vendue. Distinct du produit Catalogue et des lots Stock.',
+            'Ingrédients et/ou produits de vente associés (ex. menu enfant). Distinct des lots Stock.',
             style: TextStyle(color: NdjoColors.muted, fontSize: 12),
           ),
           const SizedBox(height: 8),
           if (composition.isEmpty)
-            const Text('Aucune composition. Cliquez sur Modifier pour saisir les ingrédients.', style: TextStyle(color: NdjoColors.danger))
+            const Text('Aucune composition. Cliquez sur Modifier pour ajouter des composants.', style: TextStyle(color: NdjoColors.danger))
           else
             Card(
               child: Padding(
@@ -606,14 +627,21 @@ class _ProductPreview extends StatelessWidget {
   }
 
   Widget _ingredientRow(Map<String, dynamic> line) {
-    final qty = line['qtyShown'] ?? line['quantity'];
-    final unit = line['unitShown']?.toString() ?? line['unit']?.toString() ?? '';
+    final kind = line['kind']?.toString() == 'VENTE' ? 'Vente' : 'Ingrédient';
+    final qty = line['displayQty'] ?? '${line['qtyShown'] ?? line['quantity']} ${line['unitShown'] ?? line['unit'] ?? ''}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Expanded(child: Text(line['name']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.w600))),
-          Text('$qty $unit', style: const TextStyle(color: NdjoColors.accent, fontWeight: FontWeight.w700)),
+          Expanded(
+            child: Text(
+              '$qty · ${line['name'] ?? ''}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Text(kind, style: const TextStyle(color: NdjoColors.muted, fontSize: 12)),
+          const SizedBox(width: 8),
+          Text(fc((line['cost'] as num?) ?? 0), style: const TextStyle(color: NdjoColors.accent)),
         ],
       ),
     );
@@ -626,6 +654,7 @@ class _ProductSheet extends StatefulWidget {
     required this.establishmentId,
     required this.categories,
     required this.ingredients,
+    required this.components,
     this.product,
   });
 
@@ -633,6 +662,7 @@ class _ProductSheet extends StatefulWidget {
   final String establishmentId;
   final List<dynamic> categories;
   final List<dynamic> ingredients;
+  final List<dynamic> components;
   final Map<String, dynamic>? product;
 
   @override
@@ -718,6 +748,26 @@ class _ProductSheetState extends State<_ProductSheet> {
       line.quantity.dispose();
     }
     super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _recipeOptions {
+    final selfId = widget.product?['id']?.toString();
+    final seen = <String>{};
+    final rows = <Map<String, dynamic>>[];
+    for (final item in [...widget.components, ...widget.ingredients]) {
+      if (item is! Map) continue;
+      final map = Map<String, dynamic>.from(item);
+      final id = map['id']?.toString() ?? '';
+      if (id.isEmpty || id == selfId || map['status']?.toString() == 'SUPPRIME') continue;
+      if (!seen.add(id)) continue;
+      rows.add(map);
+    }
+    rows.sort((a, b) {
+      final ka = '${a['kind'] == 'VENTE' ? '0' : '1'}${a['name']}';
+      final kb = '${b['kind'] == 'VENTE' ? '0' : '1'}${b['name']}';
+      return ka.compareTo(kb);
+    });
+    return rows;
   }
 
   Future<void> _addCategory() async {
@@ -1015,22 +1065,39 @@ class _ProductSheetState extends State<_ProductSheet> {
                       _gap(_labeled('Photo (URL)', TextField(controller: photoUrl, decoration: _dec(hint: 'https://…', icon: Icons.image_outlined)))),
                     ]),
                     if (kind == 'VENTE')
-                      _section('Composition / recette', 'Éléments consommés pour 1 tacos ou 1 plat. Exemple CDC : 150 g poulet, 1 tortilla, 30 g fromage.', [
+                      _section(
+                        'Composition / recette',
+                        'Associez des ingrédients et/ou d’autres produits de vente (ex. menu enfant = 1 Fanta + 1 frites). Le stock consomme chaque composant (et sa propre recette si besoin).',
+                        [
                         ...lines.asMap().entries.map((entry) {
                           final index = entry.key;
                           final line = entry.value;
+                          final options = _recipeOptions;
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: LayoutBuilder(
                               builder: (context, constraints) {
                                 final ingredientField = DropdownButtonFormField<String>(
-                                    initialValue: widget.ingredients.any((item) => item['id'] == line.ingredientId) ? line.ingredientId : null,
+                                    initialValue: options.any((item) => item['id'] == line.ingredientId) ? line.ingredientId : null,
                                     isExpanded: true,
-                                    items: widget.ingredients
-                                        .map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text(item['name'].toString(), overflow: TextOverflow.ellipsis)))
+                                    items: options
+                                        .map((item) {
+                                          final tag = item['kind']?.toString() == 'VENTE' ? 'Vente' : 'Ingrédient';
+                                          return DropdownMenuItem(
+                                            value: item['id'].toString(),
+                                            child: Text('$tag · ${item['name']}', overflow: TextOverflow.ellipsis),
+                                          );
+                                        })
                                         .toList(),
-                                    onChanged: (value) => setState(() => line.ingredientId = value ?? ''),
-                                    decoration: _dec(hint: 'Ingrédient'),
+                                    onChanged: (value) => setState(() {
+                                      line.ingredientId = value ?? '';
+                                      final selected = options.where((item) => item['id']?.toString() == value);
+                                      if (selected.isNotEmpty && selected.first['kind']?.toString() == 'VENTE') {
+                                        line.unit = 'pièce';
+                                        if (line.quantity.text.trim().isEmpty) line.quantity.text = '1';
+                                      }
+                                    }),
+                                    decoration: _dec(hint: 'Composant'),
                                   );
                                 final qtyField = TextField(controller: line.quantity, keyboardType: TextInputType.number, decoration: _dec(hint: 'Qté'));
                                 final unitField = DropdownButtonFormField<String>(
@@ -1085,14 +1152,15 @@ class _ProductSheetState extends State<_ProductSheet> {
                           alignment: Alignment.centerLeft,
                           child: TextButton.icon(
                             onPressed: () => setState(() {
+                              final options = _recipeOptions;
                               lines.add(_RecipeLine(
-                                ingredientId: widget.ingredients.isNotEmpty ? widget.ingredients.first['id'].toString() : '',
-                                quantity: '150',
-                                unit: 'g',
+                                ingredientId: options.isNotEmpty ? options.first['id'].toString() : '',
+                                quantity: options.isNotEmpty && options.first['kind']?.toString() == 'VENTE' ? '1' : '150',
+                                unit: options.isNotEmpty && options.first['kind']?.toString() == 'VENTE' ? 'pièce' : 'g',
                               ));
                             }),
                             icon: const Icon(Icons.add, size: 18),
-                            label: const Text('Ajouter un ingrédient'),
+                            label: const Text('Ajouter un composant'),
                           ),
                         ),
                       ]),
