@@ -61,6 +61,16 @@ export class PermissionService implements OnModuleInit {
         });
       }
     }
+    const discountId = idByKey['ventes.remise'];
+    if (discountId) {
+      for (const role of ['GESTIONNAIRE', 'CAISSIER'] as const) {
+        await this.prisma.rolePermission.upsert({
+          where: { role_permissionId: { role, permissionId: discountId } },
+          create: { role, permissionId: discountId },
+          update: {},
+        });
+      }
+    }
     this.cache.clear();
   }
 

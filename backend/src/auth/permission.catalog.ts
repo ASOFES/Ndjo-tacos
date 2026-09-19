@@ -83,10 +83,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'achats.voir',
     'achats.modifier',
     'achats.recevoir',
+    'ventes.remise',
   ],
   CAISSIER: [
     'ventes.voir',
     'ventes.creer',
+    'ventes.remise',
     'commandes.voir',
     'catalogue.voir',
     'factures.voir',

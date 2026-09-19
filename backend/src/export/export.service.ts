@@ -359,7 +359,9 @@ export class ExportService {
         name: 'Synthese',
         headers: ['Indicateur', 'Montant FC'],
         rows: [
-          ['Chiffre d affaires ventes', finance.revenue],
+          ['CA brut avant remise', finance.grossRevenue],
+          ['Remises accordees', finance.discounts],
+          ['Chiffre d affaires net', finance.revenue],
           ['CA paye', finance.paidRevenue],
           ['Depense produits', finance.productExpense],
           ['Pertes valorisees', finance.lossValue],
@@ -367,6 +369,15 @@ export class ExportService {
           ['Commandes', sales.orders],
           ['Payees', sales.paid],
         ],
+      },
+      {
+        name: 'Remises',
+        headers: ['Motif', 'Nb', 'Montant FC'],
+        rows: (finance.discountsByMotif ?? []).map((row: { motif: string; count: number; amount: number }) => [
+          row.motif,
+          row.count,
+          row.amount,
+        ]),
       },
       {
         name: 'Par produit',
@@ -410,7 +421,9 @@ export class ExportService {
               { header: 'Montant', width: 200, align: 'right' },
             ],
             rows: [
-              ['Chiffre d affaires ventes', fcPdf(finance.revenue)],
+              ['CA brut avant remise', fcPdf(finance.grossRevenue)],
+              ['Remises accordees', fcPdf(finance.discounts)],
+              ['Chiffre d affaires net', fcPdf(finance.revenue)],
               ['CA encaisse', fcPdf(finance.paidRevenue)],
               ['Depense produits vendus', fcPdf(finance.productExpense)],
               ['Pertes valorisees', fcPdf(finance.lossValue)],
@@ -445,11 +458,13 @@ export class ExportService {
           range: `${day(data.from)} → ${day(data.to)}`,
           kpis: [
             { label: 'Commandes', value: String(sales.orders) },
-            { label: 'CA ventes', value: fcPdf(finance.revenue) },
-            { label: 'Depense produits', value: fcPdf(finance.productExpense) },
+            { label: 'CA brut', value: fcPdf(finance.grossRevenue) },
+            { label: 'Remises', value: fcPdf(finance.discounts) },
+            { label: 'CA net', value: fcPdf(finance.revenue) },
             { label: 'Total benefice', value: fcPdf(finance.profit), highlight: true },
           ],
           notes: [
+            'CA net = apres remises. CA brut et remises sont separes pour la transparence.',
             'Le prix de vente catalogue ne change pas. La depense et le benefice suivent le prix d achat de chaque lot sorti (FEFO).',
             'Document genere pour l etablissement selectionne. Usage interne IPIP SARLU / NDJO TACOS.',
           ],

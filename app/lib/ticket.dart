@@ -85,7 +85,11 @@ String ticketMessage(Session session, Map<String, dynamic> order, {required bool
     if ((order['customerName'] ?? order['customer']?['name']) != null)
       'Client : ${order['customerName'] ?? order['customer']?['name']}',
     if (lines.isNotEmpty) lines,
-    'Total : ${fc((order['total'] as num?) ?? (ticketInvoiceOf(order)?['total'] as num?) ?? 0)}',
+    if (((order['subtotal'] as num?) ?? 0) > 0) 'Sous-total : ${fc(order['subtotal'] as num)}',
+    if (((order['discountAmount'] as num?) ?? 0) > 0)
+      'Remise ${order['discountPercent'] ?? ''}% (${order['discountMotif'] ?? '—'}) : −${fc(order['discountAmount'] as num)}',
+    if (((order['deliveryFee'] as num?) ?? 0) > 0) 'Livraison : ${fc(order['deliveryFee'] as num)}',
+    'Total net : ${fc((order['total'] as num?) ?? (ticketInvoiceOf(order)?['total'] as num?) ?? 0)}',
     'Paiement : ${orderPayLabel(order['order'] is Map ? Map<String, dynamic>.from(order['order'] as Map) : order)}',
     if (invoice && pdf != null) 'PDF : $pdf',
     '',
@@ -111,7 +115,25 @@ String ticketHtml(Session session, Map<String, dynamic> order, {required bool in
     final line = fc((item['lineTotal'] as num?) ?? ((item['unitPrice'] as num? ?? 0) * (item['quantity'] as num? ?? 1)));
     return '<tr><td>$qty</td><td>$name</td><td>$pu</td><td>$line</td></tr>';
   }).join();
+  final subtotal = (order['subtotal'] as num?) ?? 0;
+  final discountAmount = (order['discountAmount'] as num?) ?? 0;
+  final discountPercent = order['discountPercent'];
+  final discountMotif = '${order['discountMotif'] ?? ''}';
+  final deliveryFee = (order['deliveryFee'] as num?) ?? 0;
   final total = fc((order['total'] as num?) ?? (invoiceMap?['total'] as num?) ?? 0);
+  final totalsHtml = StringBuffer();
+  if (subtotal > 0) {
+    totalsHtml.writeln('<p>Sous-total : ${_esc(fc(subtotal))}</p>');
+  }
+  if (discountAmount > 0) {
+    final pct = discountPercent == null ? '' : ' $discountPercent%';
+    final motif = discountMotif.isEmpty ? '—' : discountMotif;
+    totalsHtml.writeln('<p>Remise$pct ($motif) : −${_esc(fc(discountAmount))}</p>');
+  }
+  if (deliveryFee > 0) {
+    totalsHtml.writeln('<p>Livraison : ${_esc(fc(deliveryFee))}</p>');
+  }
+  totalsHtml.writeln('<p class="total">Total net $total</p>');
   final pdf = ticketPdfUrl(order);
   final shopPhone = session.establishment?['phone']?.toString() ?? order['establishment']?['phone']?.toString() ?? '';
   final shopAddress = session.establishment?['address']?.toString() ?? order['establishment']?['address']?.toString() ?? '';
@@ -149,7 +171,7 @@ String ticketHtml(Session session, Map<String, dynamic> order, {required bool in
     <thead><tr><th>Qté</th><th>Désignation</th><th>PU</th><th>Montant</th></tr></thead>
     <tbody>$rows</tbody>
   </table>
-  <p class="total">Total $total</p>
+  $totalsHtml
   ${invoice && pdf != null ? '<p class="muted">Vérification : ${_esc(pdf)}</p>' : ''}
   <p class="muted">${invoice ? 'Facture à conserver / à imprimer.' : 'Bon de commande interne et client — à imprimer localement.'}</p>
 </body>

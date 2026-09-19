@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { normalizeCustomerCategory } from '../orders/discount.rules';
 
 const addressInclude = { zone: true };
 const customerInclude = {
@@ -43,10 +44,12 @@ export class CustomersService {
     email?: string;
     notes?: string;
     status?: string;
+    category?: string;
   }, userId: string) {
     const name = String(body.name ?? '').trim();
     const phone = String(body.phone ?? '').trim();
     if (!name || !phone) throw new BadRequestException('Nom et téléphone sont obligatoires');
+    const category = normalizeCustomerCategory(body.category);
     try {
       const customer = await this.prisma.customer.create({
         data: {
@@ -55,6 +58,7 @@ export class CustomersService {
           email: body.email?.trim() || null,
           notes: body.notes?.trim() || null,
           status: body.status ?? 'ACTIF',
+          category,
           establishmentId: body.establishmentId,
         },
         include: customerInclude,
@@ -72,6 +76,7 @@ export class CustomersService {
     email?: string | null;
     notes?: string | null;
     status?: string;
+    category?: string;
   }, userId: string) {
     const before = await this.prisma.customer.findUnique({ where: { id } });
     if (!before) throw new BadRequestException('Client introuvable');
@@ -83,6 +88,10 @@ export class CustomersService {
         email: body.email === undefined ? before.email : body.email?.trim() || null,
         notes: body.notes === undefined ? before.notes : body.notes?.trim() || null,
         status: body.status ?? before.status,
+        category:
+          body.category === undefined
+            ? before.category
+            : normalizeCustomerCategory(body.category),
       },
       include: customerInclude,
     });

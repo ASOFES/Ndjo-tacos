@@ -6,6 +6,8 @@ import { StockService } from '../stock/stock.service';
 import { WhatsAppService } from '../notifications/whatsapp.service';
 import { CustomersService } from '../customers/customers.service';
 import { createTrackingToken } from '../tracking/token';
+import { resolveDiscount } from './discount.rules';
+import * as bcrypt from 'bcryptjs';
 
 export function isDrinkCategory(name?: string | null) {
   const normalized = (name ?? '')
@@ -60,7 +62,8 @@ const orderInclude = {
   invoice: true,
   user: { select: { name: true } },
   driver: { select: { id: true, name: true, phone: true } },
-  customer: { select: { id: true, name: true, phone: true } },
+  customer: { select: { id: true, name: true, phone: true, category: true } },
+  discountApprovedBy: { select: { id: true, name: true, role: true } },
   deliveryAddress: { include: { zone: true } },
   deliveryZone: true,
 };
@@ -88,6 +91,10 @@ export class OrdersService {
       address?: string;
       zone?: string;
       deliveryFee?: number;
+      discountPercent?: number;
+      discountMotif?: string;
+      approverUsername?: string;
+      approverPassword?: string;
       items: { productId: string; quantity: number }[];
     },
     userId: string,
@@ -133,6 +140,15 @@ export class OrdersService {
       zone: body.zone,
     });
 
+    let customerCategory = 'STANDARD';
+    if (party.customerId) {
+      const customer = await this.prisma.customer.findUnique({
+        where: { id: party.customerId },
+        select: { category: true },
+      });
+      customerCategory = customer?.category ?? 'STANDARD';
+    }
+
     const order = await this.prisma.$transaction(async (tx) => {
       const products = await tx.product.findMany({
         where: { id: { in: items.map((item) => item.productId) } },
@@ -156,8 +172,38 @@ export class OrdersService {
         };
       });
       const deliveryFee = party.deliveryFee;
-      const total =
-        lines.reduce((sum, line) => sum + line.lineTotal, 0) + deliveryFee;
+      const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
+      let discountPercent = fromClient ? 0 : Number(body.discountPercent ?? 0);
+      let discountAmount = 0;
+      let discountMotif: string | null = null;
+      let discountApprovedById: string | null = null;
+      if (!fromClient && discountPercent > 0) {
+        let resolved;
+        try {
+          resolved = resolveDiscount({
+            category: customerCategory,
+            percent: discountPercent,
+            subtotal,
+          });
+        } catch (error) {
+          throw new BadRequestException(
+            error instanceof Error ? error.message : 'Remise invalide',
+          );
+        }
+        discountPercent = resolved.percent;
+        discountAmount = resolved.amount;
+        discountMotif =
+          String(body.discountMotif ?? resolved.category).toUpperCase() || resolved.category;
+        if (resolved.needsApproval) {
+          const approver = await this.assertDiscountApprover(
+            body.approverUsername,
+            body.approverPassword,
+            userId,
+          );
+          discountApprovedById = approver.id;
+        }
+      }
+      const total = Math.max(0, subtotal - discountAmount) + deliveryFee;
       const number = await this.stock.nextNumber(tx, 'NDJ');
       const hasKitchen = lines.some((line) => !drinkIds.has(line.productId));
       const created = await tx.order.create({
@@ -175,6 +221,11 @@ export class OrdersService {
           address: party.address,
           zone: party.zone,
           deliveryFee,
+          subtotal,
+          discountPercent,
+          discountAmount,
+          discountMotif,
+          discountApprovedById,
           total,
           otp: String(Math.floor(1000 + Math.random() * 9000)),
           trackingToken: createTrackingToken(),
@@ -215,8 +266,18 @@ export class OrdersService {
           action: 'CREER',
           entity: 'COMMANDE',
           entityId: created.id,
-          details: `${created.number} · ${total} FC · ${created.type}`,
-          newValue: JSON.stringify({ number: created.number, total }),
+          details:
+            discountAmount > 0
+              ? `${created.number} · ${total} FC · remise ${discountPercent}% (−${discountAmount} FC) · ${created.type}`
+              : `${created.number} · ${total} FC · ${created.type}`,
+          newValue: JSON.stringify({
+            number: created.number,
+            total,
+            subtotal,
+            discountPercent,
+            discountAmount,
+            discountMotif,
+          }),
           establishmentId: body.establishmentId,
         },
       });
@@ -234,6 +295,35 @@ export class OrdersService {
       });
     }
     return order;
+  }
+
+  private async assertDiscountApprover(
+    username?: string,
+    password?: string,
+    cashierId?: string,
+  ) {
+    const user = String(username ?? '').trim();
+    const pass = String(password ?? '');
+    if (!user || !pass) {
+      throw new BadRequestException(
+        'Remise au-delà du seuil auto : validation gestionnaire / admin requise (identifiants).',
+      );
+    }
+    const approver = await this.prisma.user.findUnique({ where: { username: user } });
+    if (!approver || !(await bcrypt.compare(pass, approver.passwordHash))) {
+      throw new BadRequestException('Validation remise : identifiants incorrects');
+    }
+    if (approver.status !== 'ACTIF') {
+      throw new BadRequestException('Validation remise : compte désactivé');
+    }
+    const allowed = ['SUPER_ADMIN', 'ADMIN', 'GESTIONNAIRE'].includes(approver.role);
+    if (!allowed) {
+      throw new BadRequestException('Validation remise : rôle insuffisant (gestionnaire ou admin)');
+    }
+    if (cashierId && approver.id === cashierId) {
+      throw new BadRequestException('La validation doit être faite par un autre compte');
+    }
+    return approver;
   }
 
   formatShortages(shortages: StockShortage[], orderNumber?: string) {

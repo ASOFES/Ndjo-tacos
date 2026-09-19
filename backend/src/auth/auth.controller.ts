@@ -70,6 +70,39 @@ export class AuthController {
     return { ok: true };
   }
 
+  /** Validation gestionnaire / admin pour une remise caisse au-delà du seuil auto. */
+  @Post('validate-approver')
+  @UseGuards(JwtGuard)
+  async validateApprover(
+    @Body() body: { username?: string; password?: string },
+    @Req() req: { user: { sub: string } },
+  ) {
+    const username = String(body.username ?? '').trim();
+    const password = String(body.password ?? '');
+    if (!username || !password) {
+      throw new UnauthorizedException('Identifiants requis');
+    }
+    const user = await this.prisma.user.findUnique({ where: { username } });
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      throw new UnauthorizedException('Identifiants incorrects');
+    }
+    if (user.status !== 'ACTIF') {
+      throw new UnauthorizedException('Compte désactivé');
+    }
+    if (!['SUPER_ADMIN', 'ADMIN', 'GESTIONNAIRE'].includes(user.role)) {
+      throw new UnauthorizedException('Rôle insuffisant pour valider une remise');
+    }
+    if (user.id === req.user.sub) {
+      throw new UnauthorizedException('Un autre compte doit valider la remise');
+    }
+    return {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      role: user.role,
+    };
+  }
+
   @Get('me')
   @UseGuards(JwtGuard)
   async me(@Req() req: { user: { sub: string } }) {

@@ -77,6 +77,7 @@ class _CustomersPageState extends State<CustomersPage> {
     final email = TextEditingController(text: current?['email']?.toString() ?? '');
     final notes = TextEditingController(text: current?['notes']?.toString() ?? '');
     var status = current?['status']?.toString() ?? 'ACTIF';
+    var category = current?['category']?.toString() ?? 'STANDARD';
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -91,6 +92,16 @@ class _CustomersPageState extends State<CustomersPage> {
                 TextField(controller: phone, decoration: const InputDecoration(labelText: 'Téléphone')),
                 TextField(controller: email, decoration: const InputDecoration(labelText: 'E-mail')),
                 TextField(controller: notes, decoration: const InputDecoration(labelText: 'Notes')),
+                DropdownButtonFormField<String>(
+                  initialValue: category,
+                  items: const [
+                    DropdownMenuItem(value: 'STANDARD', child: Text('Standard (pas de remise)')),
+                    DropdownMenuItem(value: 'REUNION', child: Text('Réunion / entreprise (jusqu’à 15%)')),
+                    DropdownMenuItem(value: 'PROMOTION', child: Text('Promotion (jusqu’à 25%)')),
+                  ],
+                  onChanged: (value) => setLocal(() => category = value ?? category),
+                  decoration: const InputDecoration(labelText: 'Catégorie tarifaire'),
+                ),
                 DropdownButtonFormField<String>(
                   initialValue: status,
                   items: const [
@@ -118,6 +129,7 @@ class _CustomersPageState extends State<CustomersPage> {
       'email': email.text.trim(),
       'notes': notes.text.trim(),
       'status': status,
+      'category': category,
     };
     if (current == null) {
       await widget.session.api.post('/customers', payload);
@@ -297,7 +309,7 @@ class _CustomersPageState extends State<CustomersPage> {
                   color: customer['id'] == openId ? const Color(0xFF3A2A1C) : null,
                   child: ListTile(
                     title: Text(customer['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: Text('${customer['phone']} · ${addresses.length} adresse(s)'),
+                    subtitle: Text('${customer['phone']} · ${customer['category'] ?? 'STANDARD'} · ${addresses.length} adresse(s)'),
                     trailing: Text(customer['status']?.toString() ?? ''),
                     onTap: () => setState(() => openId = customer['id'].toString()),
                     onLongPress: () => _editCustomer(customer),

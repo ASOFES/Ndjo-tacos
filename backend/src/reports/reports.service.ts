@@ -318,6 +318,20 @@ export class ReportsService {
 
     const revenue = sold.reduce((sum, order) => sum + order.total, 0);
     const paidRevenue = paid.reduce((sum, order) => sum + order.total, 0);
+    const grossRevenue = sold.reduce(
+      (sum, order) => sum + (order.subtotal || order.total - order.deliveryFee) + order.deliveryFee,
+      0,
+    );
+    const discounts = sold.reduce((sum, order) => sum + (order.discountAmount || 0), 0);
+    const discountsByMotif = new Map<string, { motif: string; count: number; amount: number }>();
+    for (const order of sold) {
+      if (!order.discountAmount) continue;
+      const motif = order.discountMotif || 'AUTRE';
+      const row = discountsByMotif.get(motif) ?? { motif, count: 0, amount: 0 };
+      row.count += 1;
+      row.amount += order.discountAmount;
+      discountsByMotif.set(motif, row);
+    }
     const productExpense = Math.round(materialCost);
     const roundedLoss = Math.round(lossValue);
     const margin = Math.round(revenue - productExpense);
@@ -332,6 +346,9 @@ export class ReportsService {
         paid: paid.length,
         sold: sold.length,
         revenue,
+        grossRevenue,
+        discounts,
+        discountsByMotif: [...discountsByMotif.values()].sort((a, b) => b.amount - a.amount),
         paidRevenue,
         productExpense,
         profit,
@@ -406,19 +423,24 @@ export class ReportsService {
       },
       finance: {
         revenue,
+        grossRevenue,
+        discounts,
+        discountsByMotif: [...discountsByMotif.values()].sort((a, b) => b.amount - a.amount),
         paidRevenue,
         purchases: Math.round(purchases),
         productExpense,
         expenses: 0,
         kitchenExtraCost,
         expensesNote:
-          'Dépense produits = lots sortis pour les ventes (FEFO). Le journal cuisine liste aussi ces lots, plus les sorties magasin vers cuisine. Le prix de vente catalogue ne change pas.',
+          'CA net = après remises. CA brut et remises sont séparés pour la transparence. Dépense produits = lots FEFO des ventes.',
         materialCost: productExpense,
         lossValue: roundedLoss,
         margin,
         profit,
         result: [
-          { label: 'Chiffre d’affaires ventes', amount: revenue },
+          { label: 'CA brut (avant remise)', amount: grossRevenue },
+          { label: 'Remises accordées', amount: -discounts },
+          { label: 'Chiffre d’affaires net', amount: revenue },
           { label: 'Dépense produits vendus', amount: -productExpense },
           { label: 'Pertes valorisées', amount: -roundedLoss },
           { label: 'Total bénéfice', amount: profit },

@@ -90,6 +90,7 @@ model User {
   lossesValidated       StockLoss[]        @relation("LossValidated")
   purchases             Purchase[]
   refreshTokens         RefreshToken[]
+  discountsApproved     Order[]          @relation("DiscountApprover")
 }
 
 model RefreshToken {
@@ -324,6 +325,8 @@ model Customer {
   phone           String
   email           String?
   notes           String?
+  /// STANDARD | REUNION | PROMOTION
+  category        String   @default("STANDARD")
   status          String   @default("ACTIF")
   establishmentId String
   createdAt       DateTime @default(now())
@@ -384,6 +387,13 @@ model Order {
   customerId      String?
   addressId       String?
   zoneId          String?
+  /// Montant produits avant remise (hors frais livraison)
+  subtotal        Int      @default(0)
+  discountPercent Int      @default(0)
+  discountAmount  Int      @default(0)
+  /// REUNION | PROMOTION | AUTRE
+  discountMotif   String?
+  discountApprovedById String?
   total           Int
   paid            Int      @default(0)
   changeDue       Int      @default(0)
@@ -410,6 +420,7 @@ model Order {
   user            User             @relation("CashierOrders", fields: [userId], references: [id])
   driver          User?            @relation("DriverOrders", fields: [driverId], references: [id])
   deliveredBy     User?            @relation("DeliveredBy", fields: [deliveredById], references: [id])
+  discountApprovedBy User?         @relation("DiscountApprover", fields: [discountApprovedById], references: [id])
   customer        Customer?        @relation(fields: [customerId], references: [id])
   deliveryAddress CustomerAddress? @relation(fields: [addressId], references: [id])
   deliveryZone    DeliveryZone?    @relation(fields: [zoneId], references: [id])

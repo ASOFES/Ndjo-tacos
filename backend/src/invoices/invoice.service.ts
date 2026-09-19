@@ -69,7 +69,14 @@ export class InvoiceService {
       ...order.items.map(
         (item) => `${item.quantity} x ${item.name}  ${item.lineTotal} FC`,
       ),
-      `Total : ${order.total} FC`,
+      `Sous-total : ${order.subtotal || order.total} FC`,
+      ...(order.discountAmount > 0
+        ? [
+            `Remise ${order.discountPercent}% (${order.discountMotif ?? '-'}) : -${order.discountAmount} FC`,
+          ]
+        : []),
+      ...(order.deliveryFee > 0 ? [`Livraison : ${order.deliveryFee} FC`] : []),
+      `Total net : ${order.total} FC`,
       `Paiement : ${order.paymentStatus}`,
       `Verifier : ${verifyUrl}`,
     ].join('\n');

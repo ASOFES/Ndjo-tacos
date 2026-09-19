@@ -947,7 +947,25 @@ class _PosPageState extends State<PosPage> {
 
   int get subtotal => cart.values.fold<int>(0, (sum, item) => sum + (item['unitPrice'] as int) * (item['qty'] as int));
   int get fee => type == 'LIVRAISON' ? ((selectedZone?['fee'] as num?)?.toInt() ?? 0) : 0;
-  int get total => subtotal + fee;
+  String get customerCategory =>
+      (selectedCustomer?['category'] ?? 'STANDARD').toString().toUpperCase();
+  Map<String, int> get discountRule {
+    switch (customerCategory) {
+      case 'REUNION':
+        return {'max': 15, 'auto': 10};
+      case 'PROMOTION':
+        return {'max': 25, 'auto': 10};
+      default:
+        return {'max': 0, 'auto': 0};
+    }
+  }
+  int discountPercent = 0;
+  int get discountAmount {
+    final max = discountRule['max'] ?? 0;
+    final pct = discountPercent.clamp(0, max);
+    return ((subtotal * pct) / 100).round();
+  }
+  int get total => (subtotal - discountAmount) + fee;
 
   @override
   void initState() {
@@ -1079,23 +1097,69 @@ class _PosPageState extends State<PosPage> {
     }
     final received = TextEditingController(text: '$total');
     final phoneCtrl = TextEditingController(text: selectedCustomer?['phone']?.toString() ?? '');
+    final discountCtrl = TextEditingController(text: discountPercent > 0 ? '$discountPercent' : '');
+    final approverUser = TextEditingController();
+    final approverPass = TextEditingController();
     var method = 'ESPECES';
+    var localDiscount = discountPercent.clamp(0, discountRule['max'] ?? 0);
+    final maxPct = discountRule['max'] ?? 0;
+    final autoPct = discountRule['auto'] ?? 0;
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) {
+          final pct = int.tryParse(discountCtrl.text) ?? 0;
+          localDiscount = pct.clamp(0, maxPct);
+          final discAmt = ((subtotal * localDiscount) / 100).round();
+          final payTotal = (subtotal - discAmt) + fee;
+          final needsApproval = localDiscount > autoPct && localDiscount > 0;
           final pay = int.tryParse(received.text) ?? 0;
           return AlertDialog(
-            title: Text('Paiement · ${fc(total)}'),
+            title: Text('Paiement · ${fc(payTotal)}'),
             content: SingleChildScrollView(
               child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Text(
+                  'Sous-total ${fc(subtotal)}${fee > 0 ? ' · Livraison ${fc(fee)}' : ''}',
+                  style: const TextStyle(color: NdjoColors.muted),
+                ),
                 if (type == 'LIVRAISON')
                   Text(
-                    '${selectedCustomer?['name'] ?? 'Client passage'} · ${selectedZone?['name'] ?? ''} · ${fc(fee)}',
+                    '${selectedCustomer?['name'] ?? 'Client passage'} · ${selectedZone?['name'] ?? ''}',
                     style: const TextStyle(color: NdjoColors.muted),
                   ),
+                if (selectedCustomer != null && maxPct > 0) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Catégorie ${customerCategory == 'REUNION' ? 'Réunion' : 'Promotion'} · max $maxPct% (auto ≤ $autoPct%)',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextField(
+                    controller: discountCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: 'Remise facture (%) — max $maxPct'),
+                    onChanged: (_) {
+                      setLocal(() {
+                        received.text = '${(subtotal - ((subtotal * (int.tryParse(discountCtrl.text) ?? 0).clamp(0, maxPct)) / 100).round()) + fee}';
+                      });
+                    },
+                  ),
+                  if (needsApproval) ...[
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Au-delà du seuil auto : validation gestionnaire / admin requise.',
+                      style: TextStyle(color: NdjoColors.danger, fontSize: 12),
+                    ),
+                    TextField(controller: approverUser, decoration: const InputDecoration(labelText: 'Validateur (username)')),
+                    TextField(
+                      controller: approverPass,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: 'Mot de passe validateur'),
+                    ),
+                  ],
+                  Text('Remise : −${fc(discAmt)} · Net : ${fc(payTotal)}', style: const TextStyle(color: NdjoColors.accent)),
+                ],
                 DropdownButtonFormField<String>(
                   value: method,
                   items: const [
@@ -1129,7 +1193,7 @@ class _PosPageState extends State<PosPage> {
                     ),
                   ),
                 const SizedBox(height: 8),
-                Text('Monnaie : ${fc(pay - total)}', style: const TextStyle(color: NdjoColors.accent)),
+                Text('Monnaie : ${fc(pay - payTotal)}', style: const TextStyle(color: NdjoColors.accent)),
               ],
             ),
             ),
@@ -1153,6 +1217,18 @@ class _PosPageState extends State<PosPage> {
       );
       return;
     }
+    final appliedPct = (int.tryParse(discountCtrl.text) ?? 0).clamp(0, maxPct);
+    final appliedAmt = ((subtotal * appliedPct) / 100).round();
+    final payTotal = (subtotal - appliedAmt) + fee;
+    if (appliedPct > autoPct && appliedPct > 0) {
+      if (approverUser.text.trim().isEmpty || approverPass.text.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Validation gestionnaire / admin obligatoire pour cette remise.')),
+        );
+        return;
+      }
+    }
     try {
     final payload = {
       'establishmentId': _id,
@@ -1166,8 +1242,14 @@ class _PosPageState extends State<PosPage> {
       'address': selectedAddress?['address'],
       'zone': selectedZone?['name'],
       'deliveryFee': fee,
-      'total': total,
-      'received': int.tryParse(received.text) ?? total,
+      'subtotal': subtotal,
+      'discountPercent': appliedPct,
+      'discountAmount': appliedAmt,
+      'discountMotif': appliedPct > 0 ? customerCategory : null,
+      'approverUsername': appliedPct > autoPct ? approverUser.text.trim() : null,
+      'approverPassword': appliedPct > autoPct ? approverPass.text : null,
+      'total': payTotal,
+      'received': int.tryParse(received.text) ?? payTotal,
       'queuedBy': widget.session.user?['name'],
       'items': cart.values
           .map((item) => {
@@ -1190,7 +1272,10 @@ class _PosPageState extends State<PosPage> {
         'phone': phoneCtrl.text,
       });
     }
-    setState(cart.clear);
+    setState(() {
+      cart.clear();
+      discountPercent = 0;
+    });
     if (!mounted) return;
     final checkout = paid?['checkout'] as Map<String, dynamic>?;
     final pending = method != 'ESPECES' || (type == 'LIVRAISON' && method == 'ESPECES');
@@ -1313,27 +1398,39 @@ class _PosPageState extends State<PosPage> {
                 selected: {type},
                 onSelectionChanged: (value) => setState(() => type = value.first),
               ),
-              if (type == 'LIVRAISON') ...[
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String?>(
-                  initialValue: customerId,
-                  items: [
-                    const DropdownMenuItem<String?>(value: null, child: Text('Client de passage')),
-                    ...customers.map((item) => DropdownMenuItem<String?>(value: item['id'].toString(), child: Text('${item['name']} · ${item['phone']}'))),
-                  ],
-                  onChanged: (value) => setState(() {
-                    customerId = value;
-                    final addresses = customers
-                        .where((item) => item['id'] == value)
-                        .expand((item) => (item['addresses'] as List<dynamic>? ?? []))
-                        .toList();
-                    final preferred = addresses.cast<Map>().where((item) => item['isDefault'] == true);
-                    final chosen = preferred.isNotEmpty ? preferred.first : (addresses.isNotEmpty ? addresses.first as Map : null);
-                    addressId = chosen?['id']?.toString();
-                    zoneId = chosen?['zoneId']?.toString() ?? zoneId;
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String?>(
+                initialValue: customerId,
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('Client de passage (sans remise)')),
+                  ...customers.map((item) {
+                    final cat = (item['category'] ?? 'STANDARD').toString();
+                    final tag = cat == 'REUNION'
+                        ? ' · Réunion'
+                        : cat == 'PROMOTION'
+                            ? ' · Promo'
+                            : '';
+                    return DropdownMenuItem<String?>(
+                      value: item['id'].toString(),
+                      child: Text('${item['name']} · ${item['phone']}$tag'),
+                    );
                   }),
-                  decoration: const InputDecoration(labelText: 'Client'),
-                ),
+                ],
+                onChanged: (value) => setState(() {
+                  customerId = value;
+                  discountPercent = 0;
+                  final addresses = customers
+                      .where((item) => item['id'] == value)
+                      .expand((item) => (item['addresses'] as List<dynamic>? ?? []))
+                      .toList();
+                  final preferred = addresses.cast<Map>().where((item) => item['isDefault'] == true);
+                  final chosen = preferred.isNotEmpty ? preferred.first : (addresses.isNotEmpty ? addresses.first as Map : null);
+                  addressId = chosen?['id']?.toString();
+                  zoneId = chosen?['zoneId']?.toString() ?? zoneId;
+                }),
+                decoration: const InputDecoration(labelText: 'Client (catégorie → remise)'),
+              ),
+              if (type == 'LIVRAISON') ...[
                 const SizedBox(height: 10),
                 if (customerAddresses.isNotEmpty)
                   DropdownButtonFormField<String>(
@@ -1468,6 +1565,8 @@ class _PosPageState extends State<PosPage> {
                   ),
                 ),
                 if (type == 'LIVRAISON') Text('Sous-total ${fc(subtotal)} · Livraison ${fc(fee)}', style: const TextStyle(color: NdjoColors.muted, fontSize: 12)),
+                if (discountAmount > 0)
+                  Text('Remise −${fc(discountAmount)}', style: const TextStyle(color: NdjoColors.muted, fontSize: 12)),
                 Text('TOTAL  ${fc(total)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: NdjoColors.accent)),
                 const SizedBox(height: 12),
                 Semantics(
@@ -1502,6 +1601,8 @@ class _PosPageState extends State<PosPage> {
                             child: Text('${item['qty']} × ${item['name']}', style: const TextStyle(fontSize: 13)),
                           )),
                     if (type == 'LIVRAISON') Text('Sous-total ${fc(subtotal)} · Livraison ${fc(fee)}', style: const TextStyle(color: NdjoColors.muted, fontSize: 12)),
+                    if (discountAmount > 0)
+                      Text('Remise −${fc(discountAmount)}', style: const TextStyle(color: NdjoColors.muted, fontSize: 12)),
                     Text('TOTAL  ${fc(total)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: NdjoColors.accent)),
                     const SizedBox(height: 8),
                     FilledButton(

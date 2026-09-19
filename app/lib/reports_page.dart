@@ -146,7 +146,9 @@ class _ReportsPageState extends State<ReportsPage> {
         const SizedBox(height: 20),
         if (tab == 'ventes') ...[
           Wrap(spacing: 12, runSpacing: 12, children: [
-            _tile('CA ventes', fc(sales['revenue'] as num? ?? 0)),
+            _tile('CA brut', fc(sales['grossRevenue'] as num? ?? ((sales['revenue'] as num? ?? 0) + (sales['discounts'] as num? ?? 0)))),
+            _tile('Remises', fc(sales['discounts'] as num? ?? 0)),
+            _tile('CA net', fc(sales['revenue'] as num? ?? 0)),
             _tile('CA payé', fc(sales['paidRevenue'] as num? ?? sales['revenue'] as num? ?? 0)),
             _tile('Dépense produits', fc(sales['productExpense'] as num? ?? 0)),
             _tile('Total bénéfice', fc(totalProfit)),
@@ -157,9 +159,24 @@ class _ReportsPageState extends State<ReportsPage> {
           _profitTotal(totalProfit),
           const SizedBox(height: 8),
           const Text(
-            'Le prix de vente catalogue ne change pas. La dépense et le bénéfice suivent le prix d’achat de chaque lot sorti (ex. poisson d’aujourd’hui ≠ poisson d’hier).',
+            'CA net = après remises. Le prix catalogue ne change pas. La dépense et le bénéfice suivent le prix d’achat de chaque lot sorti.',
             style: TextStyle(color: NdjoColors.muted, fontSize: 12),
           ),
+          if ((sales['discountsByMotif'] as List<dynamic>? ?? []).isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _table(
+              'Remises par motif',
+              ['Motif', 'Nb', 'Montant'],
+              (sales['discountsByMotif'] as List<dynamic>).map((item) {
+                final row = Map<String, dynamic>.from(item as Map);
+                return [
+                  '${row['motif'] ?? '—'}',
+                  '${row['count'] ?? 0}',
+                  fc((row['amount'] as num?) ?? 0),
+                ];
+              }),
+            ),
+          ],
           const SizedBox(height: 16),
           _section('Par jour', (sales['byDay'] as List<dynamic>).map((item) => '${item['date']} · ${fc(item['total'] as num)}')),
           _table(
@@ -257,7 +274,9 @@ class _ReportsPageState extends State<ReportsPage> {
         ],
         if (tab == 'finance') ...[
           Wrap(spacing: 12, runSpacing: 12, children: [
-            _tile('Chiffre d’affaires', fc(finance['revenue'] as num? ?? 0)),
+            _tile('CA brut', fc(finance['grossRevenue'] as num? ?? ((finance['revenue'] as num? ?? 0) + (finance['discounts'] as num? ?? 0)))),
+            _tile('Remises', fc(finance['discounts'] as num? ?? 0)),
+            _tile('CA net', fc(finance['revenue'] as num? ?? 0)),
             _tile('Dépense produits vendus', fc(finance['productExpense'] as num? ?? finance['materialCost'] as num? ?? 0)),
             _tile('Pertes valorisées', fc(finance['lossValue'] as num? ?? 0)),
             _tile('Total bénéfice', fc(finance['profit'] as num? ?? 0)),
@@ -271,16 +290,30 @@ class _ReportsPageState extends State<ReportsPage> {
           const SizedBox(height: 16),
           _table('Compte de résultat', ['Ligne', 'Montant'], [
             for (final row in (finance['result'] as List<dynamic>? ?? [
-              {'label': 'Chiffre d’affaires ventes', 'amount': finance['revenue']},
+              {'label': 'CA brut (avant remise)', 'amount': finance['grossRevenue'] ?? ((finance['revenue'] as num? ?? 0) + (finance['discounts'] as num? ?? 0))},
+              {'label': 'Remises accordées', 'amount': -((finance['discounts'] as num?) ?? 0)},
+              {'label': 'Chiffre d’affaires net', 'amount': finance['revenue']},
               {'label': 'Dépense produits vendus', 'amount': -((finance['productExpense'] ?? finance['materialCost'] ?? 0) as num)},
               {'label': 'Pertes valorisées', 'amount': -((finance['lossValue'] ?? 0) as num)},
               {'label': 'Total bénéfice', 'amount': finance['profit']},
             ]))
-              [
-                (row as Map)['label'].toString() == 'Bénéfice' ? 'Total bénéfice' : (row as Map)['label'].toString(),
-                fc((row['amount'] as num?) ?? 0),
-              ],
+              _resultRow(Map<String, dynamic>.from(row as Map)),
           ], hasTotal: true),
+          if ((finance['discountsByMotif'] as List<dynamic>? ?? []).isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _table(
+              'Remises par motif',
+              ['Motif', 'Nb', 'Montant'],
+              (finance['discountsByMotif'] as List<dynamic>).map((item) {
+                final row = Map<String, dynamic>.from(item as Map);
+                return [
+                  '${row['motif'] ?? '—'}',
+                  '${row['count'] ?? 0}',
+                  fc((row['amount'] as num?) ?? 0),
+                ];
+              }),
+            ),
+          ],
           const SizedBox(height: 8),
           _table('Paiements encaissés', ['Mode', 'Montant'], [
             ['Espèces', fc(payments['ESPECES'] as num? ?? 0)],
@@ -291,6 +324,14 @@ class _ReportsPageState extends State<ReportsPage> {
         ],
       ],
     );
+  }
+
+  List<String> _resultRow(Map<String, dynamic> map) {
+    final label = map['label'].toString();
+    return [
+      label == 'Bénéfice' ? 'Total bénéfice' : label,
+      fc((map['amount'] as num?) ?? 0),
+    ];
   }
 
   Widget _profitTotal(num amount) {
