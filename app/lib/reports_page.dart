@@ -220,10 +220,14 @@ class _ReportsPageState extends State<ReportsPage> {
             _tile('Péremption ≤ 7 j', '${stock['expiring']}'),
             _tile('Coût lots cuisine', fc(stock['kitchenCost'] as num? ?? 0)),
             _tile('Sorties magasin → cuisine', fc(stock['kitchenExtraCost'] as num? ?? 0)),
+            _tile('Transferts', '${(stock['transfers'] as Map?)?['count'] ?? 0}'),
+            _tile('Transferts sortis', fc(((stock['transfers'] as Map?)?['valueOut'] as num?) ?? 0)),
+            _tile('Transferts reçus', fc(((stock['transfers'] as Map?)?['valueIn'] as num?) ?? 0)),
+            _tile('À réceptionner', '${(stock['transfers'] as Map?)?['pendingReceive'] ?? 0}'),
           ]),
           const SizedBox(height: 8),
           const Text(
-            'Chaque sortie cuisine est un lot (date d’entrée + prix d’achat). Les recettes vendues sont déjà dans le bénéfice ; les sorties magasin vers cuisine apparaissent ici pour le journal du jour.',
+            'Chaque sortie cuisine est un lot (date d’entrée + prix d’achat). Les recettes vendues sont déjà dans le bénéfice ; les sorties magasin→cuisine et les transferts inter-sites apparaissent ici pour le journal stock (hors bénéfice).',
             style: TextStyle(color: NdjoColors.muted, fontSize: 12),
           ),
           const SizedBox(height: 16),
@@ -254,10 +258,65 @@ class _ReportsPageState extends State<ReportsPage> {
             ],
             hasTotal: (stock['kitchenExits'] as List<dynamic>? ?? []).isNotEmpty,
           ),
+          _table(
+            'Transferts inter-sites',
+            ['N°', 'Statut', 'Produit', 'Qté', 'Source → Dest', 'Valeur', 'Expédié', 'Reçu'],
+            [
+              ...(((stock['transfers'] as Map?)?['lines'] as List<dynamic>?) ?? []).map((item) {
+                final row = Map<String, dynamic>.from(item as Map);
+                return [
+                  '${row['number'] ?? ''}',
+                  '${row['status'] ?? ''}',
+                  '${row['product'] ?? ''}',
+                  '${row['quantity'] ?? ''} ${row['unit'] ?? ''}',
+                  '${row['source'] ?? ''} → ${row['dest'] ?? ''}',
+                  fc((row['cost'] as num?) ?? 0),
+                  formatLocalDateTime(row['shippedAt']),
+                  formatLocalDateTime(row['receivedAt']),
+                ];
+              }),
+              if ((((stock['transfers'] as Map?)?['lines'] as List<dynamic>?) ?? []).isNotEmpty)
+                [
+                  'TOTAL',
+                  '',
+                  '',
+                  '${(stock['transfers'] as Map?)?['quantity'] ?? 0}',
+                  '',
+                  fc((((stock['transfers'] as Map?)?['valueOut'] as num?) ?? 0) + (((stock['transfers'] as Map?)?['valueIn'] as num?) ?? 0)),
+                  '',
+                  '',
+                ],
+            ],
+            hasTotal: (((stock['transfers'] as Map?)?['lines'] as List<dynamic>?) ?? []).isNotEmpty,
+          ),
+          if ((((stock['transfers'] as Map?)?['bySite'] as List<dynamic>?) ?? []).isNotEmpty)
+            _table(
+              'Transferts par trajet',
+              ['Trajet', 'Nb sortis', 'Qté', 'Valeur sortie', 'Nb reçus', 'Valeur reçue'],
+              (((stock['transfers'] as Map?)?['bySite'] as List<dynamic>? ?? []).map((item) {
+                final row = Map<String, dynamic>.from(item as Map);
+                return [
+                  '${row['name'] ?? ''}',
+                  '${row['outCount'] ?? 0}',
+                  '${row['outQty'] ?? 0}',
+                  fc((row['outValue'] as num?) ?? 0),
+                  '${row['inCount'] ?? 0}',
+                  fc((row['inValue'] as num?) ?? 0),
+                ];
+              })),
+            ),
           _section('Stock bas', (stock['low'] as List<dynamic>).map((item) => '${item['name']} · ${item['qty']} ${item['unit']} (seuil ${item['alert']})')),
           _section('Pertes de la période', (stock['losses'] as List<dynamic>).map((item) => '${item['number']} · ${item['product']} · ${item['quantity']} ${item['unit']} · ${item['status']}')),
           _section('Inventaires', (stock['inventories'] as List<dynamic>).map((item) => '${item['number']} · ${item['status']} · ${item['countedBy']}')),
-          _section('Mouvements', (stock['movements'] as List<dynamic>).take(20).map((item) => '${item['number']} · ${item['type']} · ${item['product']} · lot ${item['lot'] ?? '—'} · ${item['quantity']}')),
+          _section(
+            'Mouvements (dont transferts)',
+            (stock['movements'] as List<dynamic>).take(30).map((item) {
+              final type = item['type']?.toString() ?? '';
+              final motif = item['motif']?.toString() ?? '';
+              final tag = type == 'TRANSFERT' || motif.contains('transfert') ? ' · transfert' : '';
+              return '${item['number']} · $type$tag · ${item['product']} · lot ${item['lot'] ?? '—'} · ${item['quantity']}';
+            }),
+          ),
         ],
         if (tab == 'livraison') ...[
           Wrap(spacing: 12, runSpacing: 12, children: [
@@ -279,6 +338,9 @@ class _ReportsPageState extends State<ReportsPage> {
             _tile('CA net', fc(finance['revenue'] as num? ?? 0)),
             _tile('Dépense produits vendus', fc(finance['productExpense'] as num? ?? finance['materialCost'] as num? ?? 0)),
             _tile('Pertes valorisées', fc(finance['lossValue'] as num? ?? 0)),
+            _tile('Sorties → cuisine', fc(finance['kitchenExtraCost'] as num? ?? 0)),
+            _tile('Transferts sortis', fc(((stock['transfers'] as Map?)?['valueOut'] as num?) ?? 0)),
+            _tile('Transferts reçus', fc(((stock['transfers'] as Map?)?['valueIn'] as num?) ?? 0)),
             _tile('Total bénéfice', fc(finance['profit'] as num? ?? 0)),
             _tile('CA payé', fc(finance['paidRevenue'] as num? ?? 0)),
             _tile('Achats (entrées)', fc(finance['purchases'] as num? ?? 0)),

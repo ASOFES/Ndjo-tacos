@@ -52,6 +52,7 @@ export class ReportsService {
   async dashboard(establishmentId?: string) {
     const report = await this.build({ establishmentId, period: 'jour' });
     const extras = await this.opsCounts(establishmentId);
+    const transfers = report.stock.transfers;
     return {
       products: extras.products,
       publications: extras.publications,
@@ -72,6 +73,13 @@ export class ReportsService {
       productExpenseToday: report.finance.productExpense,
       marginToday: report.finance.margin,
       profitToday: report.finance.profit,
+      kitchenExtraCostToday: report.stock.kitchenExtraCost,
+      transfersCountToday: transfers.count,
+      transfersOutToday: transfers.outCount,
+      transfersInToday: transfers.inCount,
+      transferValueOutToday: transfers.valueOut,
+      transferValueInToday: transfers.valueIn,
+      transfersPendingReceive: transfers.pendingReceive,
     };
   }
 
@@ -85,7 +93,12 @@ export class ReportsService {
     const whereEst = params.establishmentId ? { establishmentId: params.establishmentId } : {};
     const whereDate = { createdAt: { gte: from, lte: to } };
 
-    const [orders, lots, movements, kitchenMoves, losses, inventories, recipes] = await Promise.all([
+    const transferEstFilter = params.establishmentId
+      ? { OR: [{ sourceId: params.establishmentId }, { destId: params.establishmentId }] }
+      : {};
+
+    const [orders, lots, movements, kitchenMoves, transferMoves, transfersRaw, losses, inventories, recipes] =
+      await Promise.all([
       this.prisma.order.findMany({
         where: { ...whereEst, ...whereDate },
         include: {
@@ -124,6 +137,37 @@ export class ReportsService {
         include: {
           product: { select: { name: true, unit: true } },
           lot: { select: { number: true, priceBuy: true, entryDate: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.stockMovement.findMany({
+        where: {
+          ...whereEst,
+          ...whereDate,
+          OR: [
+            { type: 'TRANSFERT' },
+            { type: 'ENTREE', motif: { startsWith: 'Réception transfert' } },
+          ],
+        },
+        include: {
+          product: { select: { name: true, unit: true } },
+          lot: { select: { number: true, priceBuy: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.transfer.findMany({
+        where: {
+          ...transferEstFilter,
+          OR: [
+            { createdAt: { gte: from, lte: to } },
+            { shippedAt: { gte: from, lte: to } },
+            { receivedAt: { gte: from, lte: to } },
+          ],
+        },
+        include: {
+          source: { select: { id: true, name: true, code: true } },
+          dest: { select: { id: true, name: true, code: true } },
+          product: { select: { id: true, name: true, unit: true } },
         },
         orderBy: { createdAt: 'desc' },
       }),
@@ -182,6 +226,135 @@ export class ReportsService {
     const kitchenExtraCost = kitchenExits
       .filter((row) => row.type === 'SORTIE')
       .reduce((sum, row) => sum + row.cost, 0);
+
+    const costByTransferNumber = new Map<string, { out: number; in: number; lot?: string }>();
+    for (const move of transferMoves) {
+      const match = /transfert\s+(\S+)/i.exec(move.motif ?? '');
+      if (!match) continue;
+      const number = match[1];
+      const cost = Math.round(Math.abs(Number(move.quantity)) * (move.lot?.priceBuy ?? 0));
+      const row = costByTransferNumber.get(number) ?? { out: 0, in: 0, lot: move.lot?.number };
+      if (move.type === 'TRANSFERT') row.out += cost;
+      else row.in += cost;
+      if (move.lot?.number) row.lot = move.lot.number;
+      costByTransferNumber.set(number, row);
+    }
+
+    const transferLines = transfersRaw.map((row) => {
+      const costs = costByTransferNumber.get(row.number);
+      const direction =
+        params.establishmentId && row.destId === params.establishmentId
+          ? 'IN'
+          : params.establishmentId && row.sourceId === params.establishmentId
+            ? 'OUT'
+            : 'BOTH';
+      return {
+        number: row.number,
+        status: row.status,
+        product: row.product.name,
+        unit: row.product.unit,
+        quantity: row.quantity,
+        source: row.source.name,
+        dest: row.dest.name,
+        lot: costs?.lot ?? null,
+        costOut: costs?.out ?? 0,
+        costIn: costs?.in ?? 0,
+        cost: direction === 'IN' ? costs?.in ?? 0 : costs?.out ?? costs?.in ?? 0,
+        direction,
+        shippedAt: row.shippedAt?.toISOString() ?? null,
+        receivedAt: row.receivedAt?.toISOString() ?? null,
+        createdAt: row.createdAt.toISOString(),
+      };
+    });
+
+    const valueOut = transferMoves
+      .filter((row) => row.type === 'TRANSFERT')
+      .reduce((sum, row) => sum + Math.abs(Number(row.quantity)) * (row.lot?.priceBuy ?? 0), 0);
+    const valueIn = transferMoves
+      .filter((row) => row.type === 'ENTREE')
+      .reduce((sum, row) => sum + Math.abs(Number(row.quantity)) * (row.lot?.priceBuy ?? 0), 0);
+    const outCount = transferLines.filter(
+      (row) =>
+        row.status !== 'ANNULE' &&
+        (!params.establishmentId || row.direction === 'OUT' || row.direction === 'BOTH'),
+    ).length;
+    const inCount = transferLines.filter(
+      (row) =>
+        row.status !== 'ANNULE' &&
+        (!params.establishmentId || row.direction === 'IN' || row.direction === 'BOTH'),
+    ).length;
+    const quantity = transferLines
+      .filter((row) => row.status !== 'ANNULE')
+      .reduce((sum, row) => sum + Number(row.quantity), 0);
+
+    const byDayTransfers = new Map<string, { date: string; count: number; quantity: number; valueOut: number }>();
+    for (const row of transferLines) {
+      if (row.status === 'ANNULE') continue;
+      const date = (row.shippedAt ?? row.createdAt).slice(0, 10);
+      const dayRow = byDayTransfers.get(date) ?? { date, count: 0, quantity: 0, valueOut: 0 };
+      dayRow.count += 1;
+      dayRow.quantity += Number(row.quantity);
+      dayRow.valueOut += row.costOut || row.cost;
+      byDayTransfers.set(date, dayRow);
+    }
+
+    const bySiteTransfers = new Map<
+      string,
+      { name: string; outCount: number; outQty: number; outValue: number; inCount: number; inQty: number; inValue: number }
+    >();
+    for (const row of transferLines) {
+      if (row.status === 'ANNULE') continue;
+      const key = `${row.source} → ${row.dest}`;
+      const site = bySiteTransfers.get(key) ?? {
+        name: key,
+        outCount: 0,
+        outQty: 0,
+        outValue: 0,
+        inCount: 0,
+        inQty: 0,
+        inValue: 0,
+      };
+      site.outCount += 1;
+      site.outQty += Number(row.quantity);
+      site.outValue += row.costOut;
+      site.inCount += row.status === 'RECU' ? 1 : 0;
+      site.inQty += row.status === 'RECU' ? Number(row.quantity) : 0;
+      site.inValue += row.costIn;
+      bySiteTransfers.set(key, site);
+    }
+
+    const pendingReceive = await this.prisma.transfer.count({
+      where: {
+        status: 'EN_TRANSIT',
+        ...(params.establishmentId ? { destId: params.establishmentId } : {}),
+      },
+    });
+
+    const transfers = {
+      count: transferLines.filter((row) => row.status !== 'ANNULE').length,
+      quantity: Math.round(quantity * 1000) / 1000,
+      valueOut: Math.round(valueOut),
+      valueIn: Math.round(valueIn),
+      outCount,
+      inCount,
+      pendingReceive,
+      byDay: [...byDayTransfers.values()].sort((a, b) => a.date.localeCompare(b.date)),
+      bySite: [...bySiteTransfers.values()].sort((a, b) => b.outValue - a.outValue),
+      lines: transferLines,
+      movements: transferMoves.map((row) => ({
+        number: row.number,
+        type: row.type,
+        quantity: row.quantity,
+        motif: row.motif,
+        product: row.product.name,
+        unit: row.product.unit,
+        lot: row.lot?.number,
+        priceBuy: row.lot?.priceBuy,
+        cost: Math.round(Math.abs(Number(row.quantity)) * (row.lot?.priceBuy ?? 0)),
+        createdAt: row.createdAt.toISOString(),
+      })),
+    };
+
     for (const move of kitchenMoves) {
       const match = /^CMD:([^:]+):([^:\s]+)/.exec(move.motif ?? '');
       if (!match) continue;
@@ -392,6 +565,7 @@ export class ReportsService {
         kitchenExits,
         kitchenCost,
         kitchenExtraCost,
+        transfers,
         losses: losses.map((row) => ({
           number: row.number,
           product: row.product.name,
@@ -432,7 +606,7 @@ export class ReportsService {
         expenses: 0,
         kitchenExtraCost,
         expensesNote:
-          'CA net = après remises. CA brut et remises sont séparés pour la transparence. Dépense produits = lots FEFO des ventes.',
+          'CA net = après remises. CA brut et remises sont séparés pour la transparence. Dépense produits = lots FEFO des ventes. Transferts et sorties magasin→cuisine = journal stock (hors bénéfice).',
         materialCost: productExpense,
         lossValue: roundedLoss,
         margin,

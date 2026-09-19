@@ -490,6 +490,11 @@ class _DashboardPageState extends State<DashboardPage> {
             _StatCard(label: 'Bénéfice jour', value: fc(stats!['profitToday'] ?? stats!['marginToday'] ?? 0), icon: Icons.trending_up),
             _StatCard(label: 'Commandes', value: '${stats!['ordersToday'] ?? 0}', icon: Icons.receipt_long),
             _StatCard(label: 'Valeur stock', value: fc(stats!['stockValue'] ?? 0), icon: Icons.inventory_2),
+            _StatCard(label: 'Transferts jour', value: '${stats!['transfersCountToday'] ?? 0}', icon: Icons.swap_horiz),
+            _StatCard(label: 'Transferts sortis', value: fc(stats!['transferValueOutToday'] ?? 0), icon: Icons.outbox_outlined),
+            _StatCard(label: 'Transferts reçus', value: fc(stats!['transferValueInToday'] ?? 0), icon: Icons.move_to_inbox_outlined),
+            _StatCard(label: 'À réceptionner', value: '${stats!['transfersPendingReceive'] ?? 0}', icon: Icons.hourglass_top),
+            _StatCard(label: 'Sorties → cuisine', value: fc(stats!['kitchenExtraCostToday'] ?? 0), icon: Icons.restaurant),
             _StatCard(label: 'Livraisons', value: '${stats!['deliveries'] ?? 0}', icon: Icons.delivery_dining),
             _StatCard(label: 'Espèces', value: fc(stats!['paymentsCash'] ?? 0), icon: Icons.payments_outlined),
             _StatCard(label: 'Mobile Money', value: fc(stats!['paymentsMm'] ?? 0), icon: Icons.phone_android),
@@ -501,7 +506,11 @@ class _DashboardPageState extends State<DashboardPage> {
           child: ListTile(
             leading: const Icon(Icons.warning_amber, color: NdjoColors.accent),
             title: const Text('Alertes cahier des charges'),
-            subtitle: Text('${stats!['rupture'] ?? 0} produits en rupture\n${stats!['expiring'] ?? 0} produits proches péremption'),
+            subtitle: Text(
+              '${stats!['rupture'] ?? 0} produits en rupture\n'
+              '${stats!['expiring'] ?? 0} produits proches péremption\n'
+              '${stats!['transfersPendingReceive'] ?? 0} transfert(s) en attente de réception',
+            ),
           ),
         ),
         const SizedBox(height: 28),
