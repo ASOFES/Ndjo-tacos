@@ -91,7 +91,7 @@ class _SyncCenterPageState extends State<SyncCenterPage> {
     setState(() => clearing = true);
     try {
       await widget.session.sync?.store.clearBusinessData();
-      widget.session.notifyListeners();
+      widget.session.refreshUi();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cache local vidé. Rechargez les menus ou F5.')),

@@ -169,6 +169,8 @@ class Session extends ChangeNotifier {
     notifyListeners();
   }
 
+  void refreshUi() => notifyListeners();
+
   void openClientShop() {
     clientMode = true;
     notifyListeners();
