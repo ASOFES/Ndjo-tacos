@@ -581,4 +581,34 @@ class LocalStore {
   }
 
   int get pendingCount => pending().length;
+
+  /// Vide catalogue / commandes / file sync de cet appareil (pas le compte serveur).
+  Future<void> clearBusinessData() async {
+    _memoryQueue = [];
+    _memoryCatalog = [];
+    _memoryLists.clear();
+    _memoryMaps.clear();
+    _queueReady = true;
+    for (final box in [catalog, lots, kitchen, queue, history, meta]) {
+      try {
+        await box.clear();
+        await box.flush();
+      } catch (_) {}
+    }
+    final prefs = _prefs ?? await SharedPreferences.getInstance();
+    _prefs = prefs;
+    await prefs.remove(prefsQueueKey);
+    await prefs.remove(prefsCatalogKey);
+    await prefs.remove(prefsDbKey);
+    for (final key in [
+      prefsQueueKey,
+      'flutter.$prefsQueueKey',
+      prefsCatalogKey,
+      'flutter.$prefsCatalogKey',
+      prefsDbKey,
+      'flutter.$prefsDbKey',
+    ]) {
+      clearWebBackup(key);
+    }
+  }
 }

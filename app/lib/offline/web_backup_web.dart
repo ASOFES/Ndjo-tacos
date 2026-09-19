@@ -6,6 +6,7 @@ external JSObject get _localStorage;
 extension _LocalStorageJs on JSObject {
   external void setItem(String key, String value);
   external String? getItem(String key);
+  external void removeItem(String key);
 }
 
 void saveWebBackup(String key, String json) {
@@ -20,4 +21,10 @@ String? loadWebBackup(String key) {
   } catch (_) {
     return null;
   }
+}
+
+void clearWebBackup(String key) {
+  try {
+    _localStorage.removeItem(key);
+  } catch (_) {}
 }

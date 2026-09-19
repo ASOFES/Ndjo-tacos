@@ -61,10 +61,8 @@ class SyncService {
       final list = await api.getList(path).timeout(
         Duration(milliseconds: cached.isNotEmpty ? 1800 : 4000),
       );
-      if (list.isNotEmpty || cached.isEmpty) {
-        await store.cacheList(cacheKey, list);
-      }
-      return list.isNotEmpty ? list : cached;
+      await store.cacheList(cacheKey, list);
+      return list;
     } catch (_) {
       return cached;
     }
@@ -76,10 +74,8 @@ class SyncService {
       final data = await api.getJson(path).timeout(
         Duration(milliseconds: cached.isNotEmpty ? 1800 : 4000),
       );
-      if (data.isNotEmpty || cached.isEmpty) {
-        await store.cacheMap(cacheKey, data);
-      }
-      return data.isNotEmpty ? data : cached;
+      await store.cacheMap(cacheKey, data);
+      return data;
     } catch (_) {
       return cached;
     }
