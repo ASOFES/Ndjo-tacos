@@ -147,6 +147,42 @@ class _CatalogPageState extends State<CatalogPage> {
     if (saved == true) await _load();
   }
 
+  Future<void> _delete(Map<String, dynamic> product) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer le produit'),
+        content: Text(
+          'Supprimer « ${product['name']} » (${product['code']}) sur tous les établissements ?\n\n'
+          'Le stock de chaque site reste intact : la suppression est refusée s’il reste du stock quelque part.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: NdjoColors.danger),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.session.api.delete('/catalog/products/${product['id']}');
+      if (!mounted) return;
+      setState(() {
+        if (openId == product['id']?.toString()) openId = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Produit ${product['code']} supprimé sur tous les établissements.')),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) return const Center(child: CircularProgressIndicator());
@@ -166,12 +202,27 @@ class _CatalogPageState extends State<CatalogPage> {
                 onPressed: () => setState(() => openId = null),
               ),
               title: Text(sheet['name']?.toString() ?? 'Fiche produit'),
-              trailing: IconButton(onPressed: () => _edit(sheet), icon: const Icon(Icons.edit)),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(onPressed: () => _edit(sheet), icon: const Icon(Icons.edit), tooltip: 'Modifier'),
+                  IconButton(
+                    onPressed: () => _delete(sheet),
+                    icon: const Icon(Icons.delete_outline, color: NdjoColors.danger),
+                    tooltip: 'Supprimer',
+                  ),
+                ],
+              ),
             ),
           ),
           const Divider(height: 1, color: NdjoColors.line),
           Expanded(
-            child: _ProductPreview(product: sheet, onEdit: () => _edit(sheet), onEditComposition: () => _edit(sheet)),
+            child: _ProductPreview(
+              product: sheet,
+              onEdit: () => _edit(sheet),
+              onEditComposition: () => _edit(sheet),
+              onDelete: () => _delete(sheet),
+            ),
           ),
         ],
       );
@@ -185,7 +236,7 @@ class _CatalogPageState extends State<CatalogPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Catalogue produits', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-                    const Text('Fiche produit + composition (recette). Les lots restent dans Stock.', style: TextStyle(color: NdjoColors.muted)),
+                    const Text('Fiche + composition partagées sur tous les établissements. Les lots restent locaux (Stock).', style: TextStyle(color: NdjoColors.muted)),
                     const SizedBox(height: 12),
                     Wrap(
                       spacing: 8,
@@ -214,7 +265,7 @@ class _CatalogPageState extends State<CatalogPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Catalogue produits', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-                        Text('Fiche produit + composition (recette). Les lots restent dans Stock.', style: TextStyle(color: NdjoColors.muted)),
+                        Text('Fiche + composition partagées sur tous les établissements. Les lots restent locaux (Stock).', style: TextStyle(color: NdjoColors.muted)),
                       ],
                     ),
                   ),
@@ -314,7 +365,19 @@ class _CatalogPageState extends State<CatalogPage> {
                           DataCell(Text(product['kind'] == 'INGREDIENT' ? 'Ingrédient' : 'Vente')),
                           DataCell(Text(product['status']?.toString() ?? '')),
                           DataCell(Text(recipeLabel)),
-                          DataCell(IconButton(onPressed: () => _edit(product), icon: const Icon(Icons.edit))),
+                          DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(onPressed: () => _edit(product), icon: const Icon(Icons.edit), tooltip: 'Modifier'),
+                                IconButton(
+                                  onPressed: () => _delete(product),
+                                  icon: const Icon(Icons.delete_outline, color: NdjoColors.danger),
+                                  tooltip: 'Supprimer',
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       );
                     }).toList(),
@@ -350,7 +413,12 @@ class _CatalogPageState extends State<CatalogPage> {
           width: 420,
           child: sheet == null
               ? const Center(child: Text('Sélectionnez un produit pour voir la fiche, les lots et la recette.', textAlign: TextAlign.center, style: TextStyle(color: NdjoColors.muted)))
-              : _ProductPreview(product: sheet, onEdit: () => _edit(sheet), onEditComposition: () => _edit(sheet)),
+              : _ProductPreview(
+                  product: sheet,
+                  onEdit: () => _edit(sheet),
+                  onEditComposition: () => _edit(sheet),
+                  onDelete: () => _delete(sheet),
+                ),
         ),
       ],
     );
@@ -358,10 +426,16 @@ class _CatalogPageState extends State<CatalogPage> {
 }
 
 class _ProductPreview extends StatelessWidget {
-  const _ProductPreview({required this.product, required this.onEdit, required this.onEditComposition});
+  const _ProductPreview({
+    required this.product,
+    required this.onEdit,
+    required this.onEditComposition,
+    required this.onDelete,
+  });
   final Map<String, dynamic> product;
   final VoidCallback onEdit;
   final VoidCallback onEditComposition;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -487,6 +561,13 @@ class _ProductPreview extends StatelessWidget {
           }),
         const SizedBox(height: 16),
         FilledButton(onPressed: onEdit, child: const Text('Modifier la fiche')),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: onDelete,
+          icon: const Icon(Icons.delete_outline, color: NdjoColors.danger),
+          label: const Text('Supprimer (tous les établissements)'),
+          style: OutlinedButton.styleFrom(foregroundColor: NdjoColors.danger),
+        ),
       ],
     );
   }

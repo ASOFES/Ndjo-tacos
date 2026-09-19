@@ -3,11 +3,15 @@ import { PrismaService } from '../prisma.service';
 import { JwtGuard } from '../auth/jwt.guard';
 import { AccessGuard } from '../auth/access.guard';
 import { RequirePermission } from '../auth/require-permission.decorator';
+import { CatalogService } from '../catalog/catalog.service';
 
 @Controller('recipes')
 @UseGuards(JwtGuard, AccessGuard)
 export class RecipesController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly catalog: CatalogService,
+  ) {}
 
   @Get()
   @RequirePermission('catalogue.voir', 'stock.voir')
@@ -55,9 +59,10 @@ export class RecipesController {
         userId: req.user.sub,
         action: 'ENREGISTRER',
         entity: 'RECETTE',
-        details: `Fiche recette ${recipe.product.name}`,
+        details: `Fiche recette ${recipe.product.name} · sync multi-sites`,
       },
     });
+    await this.catalog.propagateRecipe(body.productId);
     return recipe;
   }
 }

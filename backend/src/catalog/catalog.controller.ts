@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -106,5 +107,19 @@ export class CatalogController {
       toProductDraft(body, establishmentId),
       req.user.sub,
     );
+  }
+
+  @Delete('products/:id')
+  @RequirePermission('catalogue.modifier')
+  async remove(
+    @Param('id') id: string,
+    @Req() req: AuthedRequest & { user: { sub: string } },
+  ) {
+    const before = mustExist(
+      await this.prisma.product.findUnique({ where: { id } }),
+      'Produit introuvable',
+    );
+    assertSameEstablishment(before.establishmentId, req);
+    return this.catalog.remove(id, req.user.sub);
   }
 }

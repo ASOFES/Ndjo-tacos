@@ -128,6 +128,14 @@ class Api {
     return _decode(response);
   }
 
+  Future<Map<String, dynamic>> delete(String path) async {
+    final response = await _send(() => http.delete(
+          Uri.parse('$baseUrl$path'),
+          headers: _headers(),
+        ));
+    return _decode(response);
+  }
+
   Future<({String name, List<int> bytes, String mime})> getFile(String path) async {
     final response = await _send(
       () => http.get(Uri.parse('$baseUrl$path'), headers: _headers()),
