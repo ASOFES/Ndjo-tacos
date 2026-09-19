@@ -95,102 +95,144 @@ class _RecipesPageState extends State<RecipesPage> {
         final map = item as Map<String, dynamic>;
         final unit = map['unit']?.toString() ?? 'g';
         final qty = (map['quantity'] as num?) ?? 0;
+        final kind = map['ingredient']?['kind']?.toString() == 'VENTE' ? 'VENTE' : 'INGREDIENT';
         return _RecipeEditLine(
           ingredientId: (map['ingredientId'] ?? map['ingredient']?['id'])?.toString() ?? '',
           quantity: unit == 'kg' ? '${(qty * 1000).round()}' : '$qty',
           unit: unit == 'kg' ? 'g' : unit,
+          kind: kind,
         );
       }),
     ];
+    if (rows.isEmpty) {
+      rows.add(_RecipeEditLine(ingredientId: '', quantity: '1', unit: 'pièce', kind: 'VENTE'));
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) {
-          final options = _componentOptions(excludeProductId: productId);
+          List<Map<String, dynamic>> optionsFor(String kind) {
+            return _componentOptions(excludeProductId: productId)
+                .where((item) => item['kind']?.toString() == kind)
+                .toList();
+          }
+
+          Widget lineRow(_RecipeEditLine line, int index) {
+            final options = optionsFor(line.kind);
+            final isSale = line.kind == 'VENTE';
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    isSale ? 'Produit de vente' : 'Ingrédient',
+                    style: const TextStyle(color: NdjoColors.muted, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: options.any((item) => item['id'] == line.ingredientId) ? line.ingredientId : null,
+                          isExpanded: true,
+                          items: options
+                              .map((item) => DropdownMenuItem(
+                                    value: item['id'].toString(),
+                                    child: Text(item['name'].toString(), overflow: TextOverflow.ellipsis),
+                                  ))
+                              .toList(),
+                          onChanged: (value) => setLocal(() => line.ingredientId = value ?? ''),
+                          decoration: InputDecoration(hintText: isSale ? 'Choisir un produit' : 'Choisir un ingrédient'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 72,
+                        child: TextField(controller: line.quantity, decoration: const InputDecoration(hintText: 'Qté')),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 88,
+                        child: DropdownButtonFormField<String>(
+                          initialValue: line.unit,
+                          items: isSale
+                              ? const [
+                                  DropdownMenuItem(value: 'pièce', child: Text('pièce')),
+                                  DropdownMenuItem(value: 'g', child: Text('g')),
+                                  DropdownMenuItem(value: 'kg', child: Text('kg')),
+                                ]
+                              : const [
+                                  DropdownMenuItem(value: 'g', child: Text('g')),
+                                  DropdownMenuItem(value: 'pièce', child: Text('pièce')),
+                                  DropdownMenuItem(value: 'kg', child: Text('kg')),
+                                ],
+                          onChanged: (value) => setLocal(() => line.unit = value ?? line.unit),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => setLocal(() {
+                          line.quantity.dispose();
+                          rows.removeAt(index);
+                        }),
+                        icon: const Icon(Icons.remove_circle_outline, color: NdjoColors.danger),
+                        tooltip: 'Retirer la ligne',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
+
           return AlertDialog(
             title: Text(recipe == null ? 'Nouvelle recette' : 'Modifier la composition'),
             content: SizedBox(
               width: 560,
               child: SingleChildScrollView(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     DropdownButtonFormField<String>(
                       initialValue: productId,
                       isExpanded: true,
                       items: dishes.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text(item['name'].toString()))).toList(),
-                      onChanged: recipe == null ? (value) => setLocal(() => productId = value) : null,
-                      decoration: const InputDecoration(labelText: 'Produit de vente'),
+                      onChanged: recipe == null
+                          ? (value) => setLocal(() {
+                                productId = value;
+                                for (final line in rows) {
+                                  if (line.ingredientId == value) line.ingredientId = '';
+                                }
+                              })
+                          : null,
+                      decoration: const InputDecoration(labelText: 'Plat / menu à composer'),
                     ),
                     const SizedBox(height: 8),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Associez des ingrédients et/ou d’autres produits de vente (ex. menu = 1 Fanta + 1 frites).',
-                        style: TextStyle(color: NdjoColors.muted, fontSize: 12),
-                      ),
+                    const Text(
+                      'Ajoutez autant de lignes que nécessaire : produits de vente (ex. Fanta, frites) et/ou ingrédients.',
+                      style: TextStyle(color: NdjoColors.muted, fontSize: 12),
                     ),
-                    const SizedBox(height: 12),
-                    ...rows.asMap().entries.map((entry) {
-                      final line = entry.value;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                initialValue: options.any((item) => item['id'] == line.ingredientId) ? line.ingredientId : null,
-                                isExpanded: true,
-                                items: options
-                                    .map((item) {
-                                      final tag = item['kind']?.toString() == 'VENTE' ? 'Vente' : 'Ingrédient';
-                                      return DropdownMenuItem(
-                                        value: item['id'].toString(),
-                                        child: Text('$tag · ${item['name']}', overflow: TextOverflow.ellipsis),
-                                      );
-                                    })
-                                    .toList(),
-                                onChanged: (value) => setLocal(() {
-                                  line.ingredientId = value ?? '';
-                                  final selected = options.where((item) => item['id']?.toString() == value);
-                                  if (selected.isNotEmpty && selected.first['kind']?.toString() == 'VENTE') {
-                                    line.unit = 'pièce';
-                                    if (line.quantity.text.trim().isEmpty) line.quantity.text = '1';
-                                  }
-                                }),
-                                decoration: const InputDecoration(hintText: 'Composant'),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(width: 80, child: TextField(controller: line.quantity, decoration: const InputDecoration(hintText: 'Qté'))),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 88,
-                              child: DropdownButtonFormField<String>(
-                                initialValue: line.unit,
-                                items: const [
-                                  DropdownMenuItem(value: 'g', child: Text('g')),
-                                  DropdownMenuItem(value: 'pièce', child: Text('pièce')),
-                                  DropdownMenuItem(value: 'kg', child: Text('kg')),
-                                ],
-                                onChanged: (value) => setLocal(() => line.unit = value ?? line.unit),
-                              ),
-                            ),
-                            IconButton(onPressed: () => setLocal(() => rows.removeAt(entry.key)), icon: const Icon(Icons.remove_circle_outline)),
-                          ],
+                    const SizedBox(height: 14),
+                    ...rows.asMap().entries.map((entry) => lineRow(entry.value, entry.key)),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => setLocal(() {
+                            rows.add(_RecipeEditLine(ingredientId: '', quantity: '1', unit: 'pièce', kind: 'VENTE'));
+                          }),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Ajouter un produit'),
                         ),
-                      );
-                    }),
-                    TextButton.icon(
-                      onPressed: () => setLocal(() {
-                        final first = options.isNotEmpty ? options.first : null;
-                        rows.add(_RecipeEditLine(
-                          ingredientId: first?['id']?.toString() ?? '',
-                          quantity: first?['kind']?.toString() == 'VENTE' ? '1' : '150',
-                          unit: first?['kind']?.toString() == 'VENTE' ? 'pièce' : 'g',
-                        ));
-                      }),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Ajouter un composant'),
+                        TextButton.icon(
+                          onPressed: () => setLocal(() {
+                            rows.add(_RecipeEditLine(ingredientId: '', quantity: '150', unit: 'g', kind: 'INGREDIENT'));
+                          }),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Ajouter un ingrédient'),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -347,10 +389,15 @@ class _RecipesPageState extends State<RecipesPage> {
 }
 
 class _RecipeEditLine {
-  _RecipeEditLine({required this.ingredientId, required String quantity, required this.unit})
-      : quantity = TextEditingController(text: quantity);
+  _RecipeEditLine({
+    required this.ingredientId,
+    required String quantity,
+    required this.unit,
+    this.kind = 'INGREDIENT',
+  }) : quantity = TextEditingController(text: quantity);
   String ingredientId;
   String unit;
+  String kind;
   final TextEditingController quantity;
 }
 
