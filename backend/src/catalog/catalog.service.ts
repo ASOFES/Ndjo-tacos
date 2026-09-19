@@ -310,6 +310,20 @@ export class CatalogService {
     await this.propagateFromProduct(productId);
   }
 
+  /** Supprime la composition d’un produit et la retire sur tous les établissements (même code). */
+  async clearRecipe(productId: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true, code: true, name: true },
+    });
+    if (!product) return null;
+
+    await this.prisma.recipeItem.deleteMany({ where: { recipe: { productId } } });
+    await this.prisma.recipe.deleteMany({ where: { productId } });
+    await this.propagateFromProduct(productId);
+    return product;
+  }
+
   private async ensureCategoryId(name: string, establishmentId: string) {
     const trimmed = name.trim() || 'Divers';
     const existing = await this.prisma.category.findFirst({

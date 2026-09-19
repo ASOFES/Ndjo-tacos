@@ -23,11 +23,30 @@ class RecipesPage extends StatefulWidget {
 class _RecipesPageState extends State<RecipesPage> {
   List<dynamic> recipes = [];
   List<dynamic> dishes = [];
-  List<dynamic> ingredients = [];
+  List<dynamic> components = [];
   String? error;
   bool loading = true;
 
   String get _id => widget.session.establishmentId ?? '';
+
+  List<Map<String, dynamic>> _componentOptions({String? excludeProductId}) {
+    final seen = <String>{};
+    final rows = <Map<String, dynamic>>[];
+    for (final item in components) {
+      if (item is! Map) continue;
+      final map = Map<String, dynamic>.from(item);
+      final id = map['id']?.toString() ?? '';
+      if (id.isEmpty || id == excludeProductId || map['status']?.toString() == 'SUPPRIME') continue;
+      if (!seen.add(id)) continue;
+      rows.add(map);
+    }
+    rows.sort((a, b) {
+      final ka = '${a['kind'] == 'VENTE' ? '0' : '1'}${a['name']}';
+      final kb = '${b['kind'] == 'VENTE' ? '0' : '1'}${b['name']}';
+      return ka.compareTo(kb);
+    });
+    return rows;
+  }
 
   @override
   void initState() {
@@ -38,18 +57,26 @@ class _RecipesPageState extends State<RecipesPage> {
   Future<void> _load() async {
     recipes = widget.session.peekList('recipes-$_id');
     dishes = widget.session.peekList('catalog-$_id-VENTE');
-    ingredients = widget.session.peekList('ingredients-$_id');
+    components = widget.session.peekList('catalog-$_id-TOUS');
+    if (components.isEmpty) {
+      components = [
+        ...dishes,
+        ...widget.session.peekList('ingredients-$_id'),
+      ];
+    }
     if (recipes.isNotEmpty || dishes.isNotEmpty) loading = false;
     try {
       final loaded = await Future.wait([
         widget.session.cachedList('/recipes?establishmentId=$_id', 'recipes-$_id'),
         widget.session.cachedList('/catalog/products?establishmentId=$_id&kind=VENTE', 'catalog-$_id-VENTE'),
-        widget.session.cachedList('/catalog/products?establishmentId=$_id&kind=INGREDIENT', 'ingredients-$_id'),
+        widget.session.cachedList('/catalog/products?establishmentId=$_id', 'catalog-$_id-TOUS'),
       ]);
       setState(() {
         recipes = loaded[0].isNotEmpty ? loaded[0] : recipes;
         dishes = loaded[1].isNotEmpty ? loaded[1] : dishes;
-        ingredients = loaded[2].isNotEmpty ? loaded[2] : ingredients;
+        components = (loaded[2].isNotEmpty ? loaded[2] : components)
+            .where((item) => item is Map && item['status']?.toString() != 'SUPPRIME')
+            .toList();
         loading = false;
         error = null;
       });
@@ -78,92 +105,164 @@ class _RecipesPageState extends State<RecipesPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setLocal) => AlertDialog(
-          title: Text(recipe == null ? 'Nouvelle recette' : 'Modifier la composition'),
-          content: SizedBox(
-            width: 560,
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: productId,
-                    isExpanded: true,
-                    items: dishes.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text(item['name'].toString()))).toList(),
-                    onChanged: (value) => setLocal(() => productId = value),
-                    decoration: const InputDecoration(labelText: 'Produit de vente'),
-                  ),
-                  const SizedBox(height: 12),
-                  ...rows.asMap().entries.map((entry) {
-                    final line = entry.value;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: ingredients.any((item) => item['id'] == line.ingredientId) ? line.ingredientId : null,
-                              isExpanded: true,
-                              items: ingredients.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text(item['name'].toString()))).toList(),
-                              onChanged: (value) => setLocal(() => line.ingredientId = value ?? ''),
-                              decoration: const InputDecoration(hintText: 'Ingrédient'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(width: 80, child: TextField(controller: line.quantity, decoration: const InputDecoration(hintText: 'Qté'))),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 88,
-                            child: DropdownButtonFormField<String>(
-                              initialValue: line.unit,
-                              items: const [
-                                DropdownMenuItem(value: 'g', child: Text('g')),
-                                DropdownMenuItem(value: 'pièce', child: Text('pièce')),
-                              ],
-                              onChanged: (value) => setLocal(() => line.unit = value ?? line.unit),
-                            ),
-                          ),
-                          IconButton(onPressed: () => setLocal(() => rows.removeAt(entry.key)), icon: const Icon(Icons.remove_circle_outline)),
-                        ],
+        builder: (context, setLocal) {
+          final options = _componentOptions(excludeProductId: productId);
+          return AlertDialog(
+            title: Text(recipe == null ? 'Nouvelle recette' : 'Modifier la composition'),
+            content: SizedBox(
+              width: 560,
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: productId,
+                      isExpanded: true,
+                      items: dishes.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text(item['name'].toString()))).toList(),
+                      onChanged: recipe == null ? (value) => setLocal(() => productId = value) : null,
+                      decoration: const InputDecoration(labelText: 'Produit de vente'),
+                    ),
+                    const SizedBox(height: 8),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Associez des ingrédients et/ou d’autres produits de vente (ex. menu = 1 Fanta + 1 frites).',
+                        style: TextStyle(color: NdjoColors.muted, fontSize: 12),
                       ),
-                    );
-                  }),
-                  TextButton.icon(
-                    onPressed: () => setLocal(() => rows.add(_RecipeEditLine(
-                      ingredientId: ingredients.isNotEmpty ? ingredients.first['id'].toString() : '',
-                      quantity: '150',
-                      unit: 'g',
-                    ))),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Ajouter un ingrédient'),
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 12),
+                    ...rows.asMap().entries.map((entry) {
+                      final line = entry.value;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: options.any((item) => item['id'] == line.ingredientId) ? line.ingredientId : null,
+                                isExpanded: true,
+                                items: options
+                                    .map((item) {
+                                      final tag = item['kind']?.toString() == 'VENTE' ? 'Vente' : 'Ingrédient';
+                                      return DropdownMenuItem(
+                                        value: item['id'].toString(),
+                                        child: Text('$tag · ${item['name']}', overflow: TextOverflow.ellipsis),
+                                      );
+                                    })
+                                    .toList(),
+                                onChanged: (value) => setLocal(() {
+                                  line.ingredientId = value ?? '';
+                                  final selected = options.where((item) => item['id']?.toString() == value);
+                                  if (selected.isNotEmpty && selected.first['kind']?.toString() == 'VENTE') {
+                                    line.unit = 'pièce';
+                                    if (line.quantity.text.trim().isEmpty) line.quantity.text = '1';
+                                  }
+                                }),
+                                decoration: const InputDecoration(hintText: 'Composant'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(width: 80, child: TextField(controller: line.quantity, decoration: const InputDecoration(hintText: 'Qté'))),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 88,
+                              child: DropdownButtonFormField<String>(
+                                initialValue: line.unit,
+                                items: const [
+                                  DropdownMenuItem(value: 'g', child: Text('g')),
+                                  DropdownMenuItem(value: 'pièce', child: Text('pièce')),
+                                  DropdownMenuItem(value: 'kg', child: Text('kg')),
+                                ],
+                                onChanged: (value) => setLocal(() => line.unit = value ?? line.unit),
+                              ),
+                            ),
+                            IconButton(onPressed: () => setLocal(() => rows.removeAt(entry.key)), icon: const Icon(Icons.remove_circle_outline)),
+                          ],
+                        ),
+                      );
+                    }),
+                    TextButton.icon(
+                      onPressed: () => setLocal(() {
+                        final first = options.isNotEmpty ? options.first : null;
+                        rows.add(_RecipeEditLine(
+                          ingredientId: first?['id']?.toString() ?? '',
+                          quantity: first?['kind']?.toString() == 'VENTE' ? '1' : '150',
+                          unit: first?['kind']?.toString() == 'VENTE' ? 'pièce' : 'g',
+                        ));
+                      }),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Ajouter un composant'),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enregistrer')),
-          ],
-        ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enregistrer')),
+            ],
+          );
+        },
       ),
     );
     if (ok != true || productId == null) return;
-    await widget.session.api.post('/recipes', {
-      'establishmentId': _id,
-      'productId': productId,
-      'items': rows.where((line) => line.ingredientId.isNotEmpty).map((line) {
-        final qty = num.tryParse(line.quantity.text.replaceAll(',', '.')) ?? 0;
-        return {
-          'ingredientId': line.ingredientId,
-          'quantity': line.unit == 'g' ? qty / 1000 : qty,
-          'unit': line.unit == 'g' ? 'kg' : line.unit,
-        };
-      }).toList(),
-    });
-    for (final line in rows) {
-      line.quantity.dispose();
+    try {
+      await widget.session.api.post('/recipes', {
+        'establishmentId': _id,
+        'productId': productId,
+        'items': rows.where((line) => line.ingredientId.isNotEmpty).map((line) {
+          final qty = num.tryParse(line.quantity.text.replaceAll(',', '.')) ?? 0;
+          return {
+            'ingredientId': line.ingredientId,
+            'quantity': line.unit == 'g' ? qty / 1000 : qty,
+            'unit': line.unit == 'g' ? 'kg' : line.unit,
+          };
+        }).toList(),
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Composition enregistrée sur tous les établissements.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      for (final line in rows) {
+        line.quantity.dispose();
+      }
     }
     await _load();
+  }
+
+  Future<void> _delete(Map<String, dynamic> recipe) async {
+    final productId = recipe['productId']?.toString() ?? recipe['product']?['id']?.toString();
+    final name = recipe['product']?['name']?.toString() ?? 'cette recette';
+    if (productId == null || productId.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer la composition'),
+        content: Text(
+          'Supprimer la composition de « $name » sur tous les établissements ?\n\n'
+          'Le produit reste au catalogue ; seuls les composants associés sont retirés.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: NdjoColors.danger),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.session.api.delete('/recipes/$productId');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Composition de $name supprimée.')));
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
   }
 
   @override
@@ -180,7 +279,10 @@ class _RecipesPageState extends State<RecipesPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Recettes', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-                  Text('Composez ici la recette d’un plat. Elle apparaît aussi dans Catalogue.', style: TextStyle(color: NdjoColors.muted)),
+                  Text(
+                    'Composez une recette ou un menu (ingrédients et/ou produits de vente). Visible aussi dans Catalogue.',
+                    style: TextStyle(color: NdjoColors.muted),
+                  ),
                 ],
               ),
             ),
@@ -188,6 +290,11 @@ class _RecipesPageState extends State<RecipesPage> {
           ],
         ),
         const SizedBox(height: 16),
+        if (recipes.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 24),
+            child: Text('Aucune composition. Cliquez sur Composer une recette.', style: TextStyle(color: NdjoColors.muted)),
+          ),
         ...recipes.map((item) {
           final recipe = item as Map<String, dynamic>;
           final lines = recipe['items'] as List<dynamic>? ?? [];
@@ -201,12 +308,18 @@ class _RecipesPageState extends State<RecipesPage> {
                     children: [
                       Expanded(child: Text(recipe['product']?['name']?.toString() ?? 'Recette', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
                       Text(fc(recipe['product']?['priceSell'] ?? 0), style: const TextStyle(color: NdjoColors.accent, fontWeight: FontWeight.bold)),
-                      IconButton(onPressed: () => _edit(recipe), icon: const Icon(Icons.edit)),
+                      IconButton(onPressed: () => _edit(recipe), icon: const Icon(Icons.edit), tooltip: 'Modifier'),
+                      IconButton(
+                        onPressed: () => _delete(recipe),
+                        icon: const Icon(Icons.delete_outline, color: NdjoColors.danger),
+                        tooltip: 'Supprimer',
+                      ),
                     ],
                   ),
                   DataTable(
                     columns: const [
-                      DataColumn(label: Text('Ingrédient')),
+                      DataColumn(label: Text('Composant')),
+                      DataColumn(label: Text('Type')),
                       DataColumn(label: Text('Quantité')),
                       DataColumn(label: Text('Unité')),
                     ],
@@ -214,8 +327,10 @@ class _RecipesPageState extends State<RecipesPage> {
                       final map = line as Map<String, dynamic>;
                       final unit = map['unit']?.toString() ?? '';
                       final qty = map['quantity'] as num? ?? 0;
+                      final kind = map['ingredient']?['kind']?.toString() == 'VENTE' ? 'Vente' : 'Ingrédient';
                       return DataRow(cells: [
                         DataCell(Text(map['ingredient']?['name']?.toString() ?? '')),
+                        DataCell(Text(kind)),
                         DataCell(Text(unit == 'kg' ? '${(qty * 1000).round()}' : '$qty')),
                         DataCell(Text(unit == 'kg' ? 'g' : unit)),
                       ]);

@@ -204,6 +204,41 @@ class _CatalogPageState extends State<CatalogPage> {
     }
   }
 
+  Future<void> _deleteComposition(Map<String, dynamic> product) async {
+    final id = product['id']?.toString();
+    if (id == null || id.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer la composition'),
+        content: Text(
+          'Supprimer la composition de « ${product['name']} » sur tous les établissements ?\n\n'
+          'Le produit reste au catalogue.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: NdjoColors.danger),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.session.api.delete('/recipes/$id');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Composition de ${product['name']} supprimée.')),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) return const Center(child: CircularProgressIndicator());
@@ -242,6 +277,7 @@ class _CatalogPageState extends State<CatalogPage> {
               product: sheet,
               onEdit: () => _edit(sheet),
               onEditComposition: () => _edit(sheet),
+              onDeleteComposition: () => _deleteComposition(sheet),
               onDelete: () => _delete(sheet),
             ),
           ),
@@ -438,6 +474,7 @@ class _CatalogPageState extends State<CatalogPage> {
                   product: sheet,
                   onEdit: () => _edit(sheet),
                   onEditComposition: () => _edit(sheet),
+                  onDeleteComposition: () => _deleteComposition(sheet),
                   onDelete: () => _delete(sheet),
                 ),
         ),
@@ -451,11 +488,13 @@ class _ProductPreview extends StatelessWidget {
     required this.product,
     required this.onEdit,
     required this.onEditComposition,
+    required this.onDeleteComposition,
     required this.onDelete,
   });
   final Map<String, dynamic> product;
   final VoidCallback onEdit;
   final VoidCallback onEditComposition;
+  final VoidCallback onDeleteComposition;
   final VoidCallback onDelete;
 
   @override
@@ -517,6 +556,11 @@ class _ProductPreview extends StatelessWidget {
             children: [
               const Expanded(child: Text('Composition / menu', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
               TextButton(onPressed: onEditComposition, child: const Text('Modifier')),
+              if (composition.isNotEmpty)
+                TextButton(
+                  onPressed: onDeleteComposition,
+                  child: const Text('Supprimer', style: TextStyle(color: NdjoColors.danger)),
+                ),
             ],
           ),
           const Text(

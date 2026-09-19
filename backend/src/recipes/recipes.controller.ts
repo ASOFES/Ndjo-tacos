@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { JwtGuard } from '../auth/jwt.guard';
 import { AccessGuard } from '../auth/access.guard';
@@ -37,23 +37,37 @@ export class RecipesController {
     },
     @Req() req: { user: { sub: string } },
   ) {
+    const items = body.items ?? [];
+    if (!items.length) {
+      const cleared = await this.catalog.clearRecipe(body.productId);
+      if (!cleared) throw new NotFoundException('Produit introuvable');
+      await this.prisma.auditLog.create({
+        data: {
+          userId: req.user.sub,
+          action: 'SUPPRIMER',
+          entity: 'RECETTE',
+          details: `Composition vidée ${cleared.name} · sync multi-sites`,
+        },
+      });
+      return { deleted: true, productId: body.productId };
+    }
     await assertRecipeItemsValid(this.prisma, {
       establishmentId: body.establishmentId,
       productId: body.productId,
-      items: body.items ?? [],
+      items,
     });
     const recipe = await this.prisma.recipe.upsert({
       where: { productId: body.productId },
       update: {
         items: {
           deleteMany: {},
-          create: body.items,
+          create: items,
         },
       },
       create: {
         productId: body.productId,
         establishmentId: body.establishmentId,
-        items: { create: body.items },
+        items: { create: items },
       },
       include: {
         product: true,
@@ -70,5 +84,21 @@ export class RecipesController {
     });
     await this.catalog.propagateRecipe(body.productId);
     return recipe;
+  }
+
+  @Delete(':productId')
+  @RequirePermission('catalogue.modifier')
+  async remove(@Param('productId') productId: string, @Req() req: { user: { sub: string } }) {
+    const cleared = await this.catalog.clearRecipe(productId);
+    if (!cleared) throw new NotFoundException('Produit introuvable');
+    await this.prisma.auditLog.create({
+      data: {
+        userId: req.user.sub,
+        action: 'SUPPRIMER',
+        entity: 'RECETTE',
+        details: `Composition supprimée ${cleared.name} · sync multi-sites`,
+      },
+    });
+    return { deleted: true, productId, code: cleared.code };
   }
 }
