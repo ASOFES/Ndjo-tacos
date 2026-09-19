@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'pages.dart';
 import 'session.dart';
 import 'theme.dart';
 
@@ -17,6 +18,7 @@ class _InventoryPageState extends State<InventoryPage> {
   Map<String, dynamic>? open;
   String? error;
   bool loading = true;
+  String query = '';
 
   String get _id => widget.session.establishmentId ?? '';
 
@@ -297,9 +299,14 @@ class _InventoryPageState extends State<InventoryPage> {
         ),
         const Text('Hors ligne : copie du stock théorique. Lancer / valider un inventaire nécessite le réseau.', style: TextStyle(color: NdjoColors.muted, fontSize: 12)),
         const SizedBox(height: 12),
-        if (sessions.isEmpty)
-          const Text('Aucun inventaire en copie locale.', style: TextStyle(color: NdjoColors.muted)),
-        ...sessions.map((item) {
+        NdjoSearchBar(
+          hint: 'Rechercher un inventaire…',
+          onChanged: (value) => setState(() => query = value),
+        ),
+        const SizedBox(height: 12),
+        if (ndjoFilterList(sessions, query).isEmpty)
+          Text(query.trim().isEmpty ? 'Aucun inventaire en copie locale.' : 'Aucun inventaire trouvé.', style: const TextStyle(color: NdjoColors.muted)),
+        ...ndjoFilterList(sessions, query).map((item) {
           final session = Map<String, dynamic>.from(item as Map);
           return Card(
             color: session['id'] == open?['id'] ? const Color(0xFF3A2A1C) : null,
@@ -341,9 +348,14 @@ class _InventoryPageState extends State<InventoryPage> {
         const SizedBox(height: 8),
         const Text('Données du catalogue / caisse déjà enregistrées sur cet appareil.', style: TextStyle(color: NdjoColors.muted)),
         const SizedBox(height: 16),
-        if (theoretical.isEmpty)
-          const Text('Aucune quantité en copie locale. Ouvrez d’abord la Caisse en ligne une fois.', style: TextStyle(color: NdjoColors.muted)),
-        ...theoretical.map((item) {
+        if (ndjoFilterList(theoretical, query).isEmpty)
+          Text(
+            query.trim().isEmpty
+                ? 'Aucune quantité en copie locale. Ouvrez d’abord la Caisse en ligne une fois.'
+                : 'Aucun produit trouvé.',
+            style: const TextStyle(color: NdjoColors.muted),
+          ),
+        ...ndjoFilterList(theoretical, query).map((item) {
           final map = Map<String, dynamic>.from(item as Map);
           return Card(
             child: ListTile(
@@ -379,9 +391,14 @@ class _InventoryPageState extends State<InventoryPage> {
         if (open!['totals'] is Map)
           _kv('Progression', '${open!['totals']?['counted'] ?? 0} / ${open!['totals']?['lines'] ?? lines.length} lignes · ${open!['totals']?['gaps'] ?? 0} écart(s)'),
         const SizedBox(height: 12),
-        if (lines.isEmpty)
-          const Text('Aucune ligne sur cet inventaire.', style: TextStyle(color: NdjoColors.muted)),
-        ...lines.map((item) {
+        NdjoSearchBar(
+          hint: 'Rechercher une ligne (produit, lot…)',
+          onChanged: (value) => setState(() => query = value),
+        ),
+        const SizedBox(height: 12),
+        if (ndjoFilterList(lines, query).isEmpty)
+          Text(query.trim().isEmpty ? 'Aucune ligne sur cet inventaire.' : 'Aucune ligne trouvée.', style: const TextStyle(color: NdjoColors.muted)),
+        ...ndjoFilterList(lines, query).map((item) {
           final line = item as Map<String, dynamic>;
           final kind = line['kind']?.toString() ?? '—';
           final color = kind == 'MANQUE'

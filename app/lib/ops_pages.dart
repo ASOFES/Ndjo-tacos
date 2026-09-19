@@ -23,6 +23,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
   String? selectedId;
   String? error;
   bool loading = true;
+  String query = '';
 
   @override
   void initState() {
@@ -127,8 +128,13 @@ class _OrganizationPageState extends State<OrganizationPage> {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        NdjoSearchBar(
+          hint: 'Rechercher un établissement…',
+          onChanged: (value) => setState(() => query = value),
+        ),
         const SizedBox(height: 16),
-        ...establishments.map((item) {
+        ...ndjoFilterList(establishments, query).map((item) {
           final map = item as Map<String, dynamic>;
           final selected = map['id'] == selectedId;
           return Card(
@@ -179,6 +185,7 @@ class _UsersPageState extends State<UsersPage> {
   List<dynamic> departments = [];
   String? error;
   bool loading = true;
+  String query = '';
 
   String get _id => widget.session.establishmentId ?? '';
 
@@ -305,8 +312,13 @@ class _UsersPageState extends State<UsersPage> {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        NdjoSearchBar(
+          hint: 'Rechercher un utilisateur (nom, login, rôle…)',
+          onChanged: (value) => setState(() => query = value),
+        ),
         const SizedBox(height: 16),
-        ...users.map((item) {
+        ...ndjoFilterList(users, query).map((item) {
           final map = item as Map<String, dynamic>;
           return Card(
             child: ListTile(
@@ -345,6 +357,7 @@ class _StockPageState extends State<StockPage> {
   String? error;
   bool loading = true;
   Timer? _poll;
+  String query = '';
 
   String get _id => widget.session.establishmentId ?? '';
 
@@ -725,6 +738,10 @@ class _StockPageState extends State<StockPage> {
         if (item is Map && item['destId']?.toString() == _id) Map<String, dynamic>.from(item),
     ];
     final pendingReceive = incoming.where((item) => item['status']?.toString() == 'EN_TRANSIT').toList();
+    final shownTransfers = ndjoFilterList(transfers, query);
+    final shownProducts = ndjoFilterList(products, query);
+    final shownLots = ndjoFilterList(lots, query);
+    final shownMovements = ndjoFilterList(movements, query);
     return ListView(
       padding: EdgeInsets.all(compact ? 16 : 24),
       children: [
@@ -770,6 +787,11 @@ class _StockPageState extends State<StockPage> {
               ),
             ],
           ),
+        const SizedBox(height: 12),
+        NdjoSearchBar(
+          hint: 'Rechercher (produit, lot, transfert, mouvement…)',
+          onChanged: (value) => setState(() => query = value),
+        ),
         if (pendingReceive.isNotEmpty) ...[
           const SizedBox(height: 16),
           Card(
@@ -793,10 +815,10 @@ class _StockPageState extends State<StockPage> {
           style: TextStyle(color: NdjoColors.muted, fontSize: 12),
         ),
         const SizedBox(height: 8),
-        if (transfers.isEmpty)
-          const Text('Aucun transfert.', style: TextStyle(color: NdjoColors.muted))
+        if (shownTransfers.isEmpty)
+          Text(query.trim().isEmpty ? 'Aucun transfert.' : 'Aucun transfert trouvé.', style: const TextStyle(color: NdjoColors.muted))
         else
-          ...transfers.map((item) {
+          ...shownTransfers.map((item) {
             final map = Map<String, dynamic>.from(item as Map);
             final status = map['status']?.toString() ?? '';
             final fromHere = map['sourceId']?.toString() == _id;
@@ -843,7 +865,9 @@ class _StockPageState extends State<StockPage> {
           }),
         const SizedBox(height: 20),
         const Text('Niveaux', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-        ...products.map((item) {
+        if (shownProducts.isEmpty)
+          Text(query.trim().isEmpty ? 'Aucun produit.' : 'Aucun produit trouvé.', style: const TextStyle(color: NdjoColors.muted)),
+        ...shownProducts.map((item) {
           final map = Map<String, dynamic>.from(item as Map);
           final low = map['lowStock'] == true;
           final prices = (map['buyPrices'] as List?)
@@ -871,7 +895,9 @@ class _StockPageState extends State<StockPage> {
         }),
         const SizedBox(height: 20),
         const Text('Lots', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-        ...lots.map((item) {
+        if (shownLots.isEmpty)
+          Text(query.trim().isEmpty ? 'Aucun lot.' : 'Aucun lot trouvé.', style: const TextStyle(color: NdjoColors.muted)),
+        ...shownLots.map((item) {
           final map = Map<String, dynamic>.from(item as Map);
           final entry = (map['entryDate'] ?? map['createdAt'])?.toString().split('T').first ?? '—';
           return Card(
@@ -886,7 +912,9 @@ class _StockPageState extends State<StockPage> {
         }),
         const SizedBox(height: 20),
         const Text('Mouvements', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-        ...movements.map((item) {
+        if (shownMovements.isEmpty)
+          Text(query.trim().isEmpty ? 'Aucun mouvement.' : 'Aucun mouvement trouvé.', style: const TextStyle(color: NdjoColors.muted)),
+        ...shownMovements.map((item) {
           final map = item as Map<String, dynamic>;
           return Card(
             child: ListTile(
@@ -923,6 +951,7 @@ class _PosPageState extends State<PosPage> {
   bool loading = true;
   Timer? _poll;
   String? _siteId;
+  String query = '';
 
   String get _id => widget.session.establishmentId ?? '';
 
@@ -1332,7 +1361,10 @@ class _PosPageState extends State<PosPage> {
     final pendingOps = widget.session.sync?.store.pendingCount ?? 0;
     final mappedProducts = products.map(_asPosMap).toList();
     final activeProducts = mappedProducts.where((item) => item['status']?.toString() == 'ACTIF').toList();
-    final visibleProducts = activeProducts.isNotEmpty ? activeProducts : mappedProducts;
+    final visibleProducts = ndjoFilterList(
+      activeProducts.isNotEmpty ? activeProducts : mappedProducts,
+      query,
+    );
     final compact = ndjoCompact(context);
     final menu = [
                     const Text('Caisse', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
@@ -1397,6 +1429,11 @@ class _PosPageState extends State<PosPage> {
                 ],
                 selected: {type},
                 onSelectionChanged: (value) => setState(() => type = value.first),
+              ),
+              const SizedBox(height: 12),
+              NdjoSearchBar(
+                hint: 'Rechercher un produit…',
+                onChanged: (value) => setState(() => query = value),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String?>(

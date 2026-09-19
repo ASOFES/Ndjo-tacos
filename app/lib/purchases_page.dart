@@ -20,6 +20,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
   String tab = 'achats';
   String? error;
   bool loading = true;
+  String query = '';
 
   String get _id => widget.session.establishmentId ?? '';
 
@@ -367,19 +368,31 @@ class _PurchasesPageState extends State<PurchasesPage> {
                   ],
                 ),
         ),
+        if (!hideBar)
+          Padding(
+            padding: EdgeInsets.fromLTRB(compact ? 16 : 24, 12, compact ? 16 : 24, 0),
+            child: NdjoSearchBar(
+              key: ValueKey('purchase-search-$tab'),
+              hint: tab == 'achats' ? 'Rechercher un bon d’achat…' : 'Rechercher un fournisseur…',
+              onChanged: (value) => setState(() => query = value),
+            ),
+          ),
         Expanded(child: tab == 'achats' ? _purchases() : _suppliers()),
       ],
     );
   }
 
   Widget _suppliers() {
+    final filtered = ndjoFilterList(suppliers, query);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
         const Text('Fournisseurs', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
         const Text('Fiches distinctes du catalogue. Un achat crée des lots, pas un nouveau prix catalogue.', style: TextStyle(color: NdjoColors.muted)),
         const SizedBox(height: 16),
-        ...suppliers.map((item) {
+        if (filtered.isEmpty)
+          const Text('Aucun fournisseur trouvé.', style: TextStyle(color: NdjoColors.muted)),
+        ...filtered.map((item) {
           final supplier = item as Map<String, dynamic>;
           return Card(
             child: ListTile(
@@ -397,14 +410,15 @@ class _PurchasesPageState extends State<PurchasesPage> {
 
   Widget _purchases() {
     final compact = ndjoCompact(context);
+    final filtered = ndjoFilterList(purchases, query);
     final list = ListView(
       padding: EdgeInsets.all(compact ? 16 : 20),
       children: [
         const Text('Bons d’achat', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        if (purchases.isEmpty)
-          const Text('Aucun bon d’achat en copie locale.', style: TextStyle(color: NdjoColors.muted)),
-        ...purchases.map((item) {
+        if (filtered.isEmpty)
+          Text(query.trim().isEmpty ? 'Aucun bon d’achat en copie locale.' : 'Aucun bon trouvé.', style: const TextStyle(color: NdjoColors.muted)),
+        ...filtered.map((item) {
           final purchase = item as Map<String, dynamic>;
           return Card(
             color: purchase['id'] == open?['id'] ? const Color(0xFF3A2A1C) : null,

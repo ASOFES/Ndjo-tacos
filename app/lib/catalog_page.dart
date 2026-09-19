@@ -39,6 +39,7 @@ class _CatalogPageState extends State<CatalogPage> {
   bool loading = true;
   String kind = 'TOUS';
   String? openId;
+  String query = '';
 
   String get _id =>
       widget.session.establishmentId ??
@@ -256,6 +257,11 @@ class _CatalogPageState extends State<CatalogPage> {
                   _load();
                 },
               ),
+              const SizedBox(height: 12),
+              NdjoSearchBar(
+                hint: 'Rechercher un produit (nom, code, catégorie…)',
+                onChanged: (value) => setState(() => query = value),
+              ),
               const SizedBox(height: 8),
               Text(
                 publishedVersion == null
@@ -284,7 +290,7 @@ class _CatalogPageState extends State<CatalogPage> {
                       DataColumn(label: Text('Recette')),
                       DataColumn(label: Text('')),
                     ],
-                    rows: products.map((item) {
+                    rows: ndjoFilterList(products, query).map((item) {
                       final product = Map<String, dynamic>.from(item as Map);
                       final lines = (product['composition'] as List<dynamic>? ?? []).length;
                       final recipeLabel = product['kind'] == 'INGREDIENT'

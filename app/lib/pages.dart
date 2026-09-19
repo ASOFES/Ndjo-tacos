@@ -110,6 +110,116 @@ Widget ndjoExportButtons({
   );
 }
 
+/// Recherche locale sur listes (catalogue, stock, clients, etc.).
+bool ndjoMatchesQuery(dynamic item, String query) {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return true;
+  if (item is! Map) return item.toString().toLowerCase().contains(q);
+  final parts = <String>[];
+  void add(dynamic value) {
+    if (value == null) return;
+    if (value is Map) {
+      add(value['name']);
+      add(value['code']);
+      add(value['phone']);
+      add(value['number']);
+      add(value['username']);
+      return;
+    }
+    final text = value.toString().trim();
+    if (text.isNotEmpty) parts.add(text);
+  }
+
+  add(item['name']);
+  add(item['code']);
+  add(item['phone']);
+  add(item['number']);
+  add(item['username']);
+  add(item['role']);
+  add(item['email']);
+  add(item['address']);
+  add(item['motif']);
+  add(item['type']);
+  add(item['status']);
+  add(item['category']);
+  add(item['product']);
+  add(item['supplier']);
+  add(item['source']);
+  add(item['dest']);
+  add(item['user']);
+  add(item['label']);
+  return parts.join(' ').toLowerCase().contains(q);
+}
+
+List<dynamic> ndjoFilterList(List<dynamic> items, String query) {
+  if (query.trim().isEmpty) return items;
+  return items.where((item) => ndjoMatchesQuery(item, query)).toList();
+}
+
+class NdjoSearchBar extends StatefulWidget {
+  const NdjoSearchBar({
+    super.key,
+    required this.onChanged,
+    this.hint = 'Rechercher…',
+    this.initial = '',
+  });
+
+  final ValueChanged<String> onChanged;
+  final String hint;
+  final String initial;
+
+  @override
+  State<NdjoSearchBar> createState() => _NdjoSearchBarState();
+}
+
+class _NdjoSearchBarState extends State<NdjoSearchBar> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initial);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      onChanged: (value) {
+        setState(() {});
+        widget.onChanged(value);
+      },
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: widget.hint,
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: _controller.text.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Effacer',
+                icon: const Icon(Icons.clear),
+                onPressed: () {
+                  _controller.clear();
+                  widget.onChanged('');
+                  setState(() {});
+                },
+              ),
+        border: const OutlineInputBorder(),
+        isDense: true,
+        filled: true,
+        fillColor: NdjoColors.surface,
+      ),
+    );
+  }
+}
+
+
 Future<void> downloadNdjoExport(
   BuildContext context,
   Session session, {

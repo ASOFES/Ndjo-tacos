@@ -19,6 +19,7 @@ class _CustomersPageState extends State<CustomersPage> {
   String? error;
   bool loading = true;
   String tab = 'clients';
+  String query = '';
 
   String get _id =>
       widget.session.establishmentId ??
@@ -276,7 +277,10 @@ class _CustomersPageState extends State<CustomersPage> {
                   ButtonSegment(value: 'zones', label: Text('Zones de livraison')),
                 ],
                 selected: {tab},
-                onSelectionChanged: (value) => setState(() => tab = value.first),
+                onSelectionChanged: (value) => setState(() {
+                  tab = value.first;
+                  query = '';
+                }),
               ),
               const Spacer(),
               FilledButton.icon(
@@ -287,12 +291,21 @@ class _CustomersPageState extends State<CustomersPage> {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+          child: NdjoSearchBar(
+            key: ValueKey('search-$tab'),
+            hint: tab == 'clients' ? 'Rechercher un client (nom, téléphone…)' : 'Rechercher une zone…',
+            onChanged: (value) => setState(() => query = value),
+          ),
+        ),
         Expanded(child: tab == 'clients' ? _clientsView() : _zonesView()),
       ],
     );
   }
 
   Widget _clientsView() {
+    final filtered = ndjoFilterList(customers, query);
     return Row(
       children: [
         Expanded(
@@ -302,7 +315,9 @@ class _CustomersPageState extends State<CustomersPage> {
               const Text('Clients', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
               const Text('Fiche client + plusieurs adresses. Les frais viennent de la zone, pas d’un montant saisi à la caisse.', style: TextStyle(color: NdjoColors.muted)),
               const SizedBox(height: 16),
-              ...customers.map((item) {
+              if (filtered.isEmpty)
+                const Text('Aucun client trouvé.', style: TextStyle(color: NdjoColors.muted)),
+              ...filtered.map((item) {
                 final customer = item as Map<String, dynamic>;
                 final addresses = customer['addresses'] as List<dynamic>? ?? [];
                 return Card(
@@ -336,31 +351,35 @@ class _CustomersPageState extends State<CustomersPage> {
   }
 
   Widget _zonesView() {
+    final filtered = ndjoFilterList(zones, query);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
         const Text('Zones de livraison', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
         const Text('Les frais sont appliqués automatiquement à la commande selon la zone de l’adresse.', style: TextStyle(color: NdjoColors.muted)),
         const SizedBox(height: 16),
-        DataTable(
-          columns: const [
-            DataColumn(label: Text('Code')),
-            DataColumn(label: Text('Nom')),
-            DataColumn(label: Text('Frais')),
-            DataColumn(label: Text('Statut')),
-            DataColumn(label: Text('')),
-          ],
-          rows: zones.map((item) {
-            final zone = item as Map<String, dynamic>;
-            return DataRow(cells: [
-              DataCell(Text(zone['code']?.toString() ?? '')),
-              DataCell(Text(zone['name']?.toString() ?? '')),
-              DataCell(Text(fc(zone['fee'] as num? ?? 0), style: const TextStyle(color: NdjoColors.accent, fontWeight: FontWeight.bold))),
-              DataCell(Text(zone['status']?.toString() ?? '')),
-              DataCell(IconButton(onPressed: () => _editZone(zone), icon: const Icon(Icons.edit))),
-            ]);
-          }).toList(),
-        ),
+        if (filtered.isEmpty)
+          const Text('Aucune zone trouvée.', style: TextStyle(color: NdjoColors.muted))
+        else
+          DataTable(
+            columns: const [
+              DataColumn(label: Text('Code')),
+              DataColumn(label: Text('Nom')),
+              DataColumn(label: Text('Frais')),
+              DataColumn(label: Text('Statut')),
+              DataColumn(label: Text('')),
+            ],
+            rows: filtered.map((item) {
+              final zone = item as Map<String, dynamic>;
+              return DataRow(cells: [
+                DataCell(Text(zone['code']?.toString() ?? '')),
+                DataCell(Text(zone['name']?.toString() ?? '')),
+                DataCell(Text(fc(zone['fee'] as num? ?? 0), style: const TextStyle(color: NdjoColors.accent, fontWeight: FontWeight.bold))),
+                DataCell(Text(zone['status']?.toString() ?? '')),
+                DataCell(IconButton(onPressed: () => _editZone(zone), icon: const Icon(Icons.edit))),
+              ]);
+            }).toList(),
+          ),
       ],
     );
   }
