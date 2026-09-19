@@ -46,7 +46,6 @@ class SyncCenterPage extends StatefulWidget {
 class _SyncCenterPageState extends State<SyncCenterPage> {
   Map<String, dynamic>? data;
   String? error;
-  bool clearing = false;
 
   @override
   void initState() {
@@ -68,42 +67,12 @@ class _SyncCenterPageState extends State<SyncCenterPage> {
     }
   }
 
-  Future<void> _clearLocal() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Vider le cache de cet appareil'),
-        content: const Text(
-          'Supprime catalogue, commandes, stock et file hors ligne enregistrés dans ce navigateur / téléphone. '
-          'La base serveur n’est pas modifiée. Utile après une purge serveur.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: NdjoColors.danger),
-            child: const Text('Vider'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    setState(() => clearing = true);
-    try {
-      await widget.session.sync?.store.clearBusinessData();
-      widget.session.refreshUi();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cache local vidé. Rechargez les menus ou F5.')),
-      );
-      await _load();
-    } finally {
-      if (mounted) setState(() => clearing = false);
-    }
-  }
-
-  Widget _localDbCard(Map<String, int> snapshots) {
-    return Card(
+  @override
+  Widget build(BuildContext context) {
+    final localPending = widget.session.sync?.store.pending() ?? [];
+    final localHistory = widget.session.sync?.store.historyRows() ?? [];
+    final snapshots = widget.session.sync?.store.snapshotCounts() ?? {};
+    final localDb = Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -125,27 +94,15 @@ class _SyncCenterPageState extends State<SyncCenterPage> {
                   child: Text('${entry.key} · ${entry.value} enregistrement(s)'),
                 ),
               ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: clearing ? null : _clearLocal,
-              icon: clearing
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.delete_forever),
-              label: Text(clearing ? 'Vidage…' : 'Vider le cache local'),
-              style: OutlinedButton.styleFrom(foregroundColor: NdjoColors.danger),
+            const SizedBox(height: 8),
+            const Text(
+              'Pour supprimer les données bloquées : bouton rouge sur Tableau de bord ou Caisse.',
+              style: TextStyle(color: NdjoColors.muted, fontSize: 12),
             ),
           ],
         ),
       ),
     );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final localPending = widget.session.sync?.store.pending() ?? [];
-    final localHistory = widget.session.sync?.store.historyRows() ?? [];
-    final snapshots = widget.session.sync?.store.snapshotCounts() ?? {};
-    final localDb = _localDbCard(snapshots);
     if (error != null && data == null) {
       return ListView(
         padding: const EdgeInsets.all(24),

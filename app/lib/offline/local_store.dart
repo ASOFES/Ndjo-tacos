@@ -610,5 +610,6 @@ class LocalStore {
     ]) {
       clearWebBackup(key);
     }
+    clearAllNdjoWebStorage();
   }
 }

@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class Api {
   static const appVersion = '1.0.0';
-  static const appBuild = 5;
+  static const appBuild = 6;
   static const prefsKey = 'ndjo_api_base';
   static String? _override;
 

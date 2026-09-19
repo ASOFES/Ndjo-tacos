@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'clear_stuck_data.dart';
 import 'export_file.dart';
 import 'session.dart';
 import 'theme.dart';
@@ -459,6 +460,11 @@ class _DashboardPageState extends State<DashboardPage> {
         const Text('Tableau de bord', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
         const SizedBox(height: 6),
         Text('Établissement : ${widget.session.establishment?['name'] ?? 'Tous'}', style: const TextStyle(color: NdjoColors.muted)),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: NdjoClearStuckDataButton(session: widget.session),
+        ),
         if (stats!['offline'] == true || pending.isNotEmpty) ...[
           const SizedBox(height: 12),
           Card(

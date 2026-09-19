@@ -2,11 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'api.dart';
+import 'clear_stuck_data.dart';
 import 'pages.dart';
 import 'session.dart';
 import 'theme.dart';
 import 'ticket.dart';
-import 'api.dart';
 
 class OrganizationPage extends StatefulWidget {
   const OrganizationPage({super.key, required this.session});
@@ -1250,6 +1251,9 @@ class _PosPageState extends State<PosPage> {
     final compact = ndjoCompact(context);
     final menu = [
                     const Text('Caisse', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    NdjoClearStuckDataButton(session: widget.session),
+                    const SizedBox(height: 8),
                     ndjoExportButtons(
                       onExcel: () => downloadNdjoExport(context, widget.session, kind: 'sales', format: 'xls', period: 'jour'),
                       onPdf: () => downloadNdjoExport(context, widget.session, kind: 'sales', format: 'pdf', period: 'jour'),
