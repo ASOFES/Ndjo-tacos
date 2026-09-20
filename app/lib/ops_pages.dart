@@ -358,6 +358,9 @@ class _StockPageState extends State<StockPage> {
   bool loading = true;
   String query = '';
   String _dataFp = '';
+  Timer? _poll;
+  int _seenRevision = -1;
+  bool _loadingRemote = false;
 
   String get _id => widget.session.establishmentId ?? '';
 
@@ -369,6 +372,8 @@ class _StockPageState extends State<StockPage> {
         out.write(item['id']);
         out.write(':');
         out.write(item['stockQty'] ?? item['qtyCurrent'] ?? item['status'] ?? '');
+        out.write(':');
+        out.write(item['name'] ?? item['number'] ?? '');
         out.write(';');
       }
       return out.toString();
@@ -379,18 +384,39 @@ class _StockPageState extends State<StockPage> {
   @override
   void initState() {
     super.initState();
+    _seenRevision = widget.session.dataRevision.value;
+    widget.session.dataRevision.addListener(_onDataRevision);
+    _poll = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) _load(silent: true);
+    });
     _load();
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    widget.session.dataRevision.removeListener(_onDataRevision);
+    super.dispose();
+  }
+
+  void _onDataRevision() {
+    final next = widget.session.dataRevision.value;
+    if (next == _seenRevision) return;
+    _seenRevision = next;
+    if (mounted) _load(silent: true);
   }
 
   @override
   void didUpdateWidget(covariant StockPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.session.establishmentId != widget.session.establishmentId) {
+      _dataFp = '';
       _load();
     }
   }
 
   Future<void> _load({bool silent = false}) async {
+    if (_loadingRemote && silent) return;
     final store = widget.session.sync?.store;
     var localProducts = store?.localStockSummary() ?? [];
     var localLots = store?.allCachedLots(_id) ?? [];
@@ -398,7 +424,7 @@ class _StockPageState extends State<StockPage> {
     var localTransfers = widget.session.peekList('stock-tr-$_id');
     if ((localProducts.isNotEmpty || localLots.isNotEmpty) && mounted) {
       final fp = _fingerprint(localProducts, localLots, localMovements, localTransfers);
-      if (!silent || fp != _dataFp || loading) {
+      if (fp != _dataFp || loading) {
         setState(() {
           products = localProducts;
           lots = localLots;
@@ -412,6 +438,7 @@ class _StockPageState extends State<StockPage> {
     } else if (!silent && mounted && products.isEmpty) {
       setState(() => loading = true);
     }
+    _loadingRemote = true;
     try {
       final loadedProducts = await widget.session.cachedList('/stock/summary?establishmentId=$_id', 'stock-summary-$_id');
       final loadedLots = await widget.session.cachedList('/stock/lots?establishmentId=$_id', 'stock-lots-$_id');
@@ -447,7 +474,15 @@ class _StockPageState extends State<StockPage> {
         error = null;
         loading = false;
       });
+    } finally {
+      _loadingRemote = false;
     }
+  }
+
+  Future<void> _afterMutation() async {
+    widget.session.invalidateData();
+    _seenRevision = widget.session.dataRevision.value;
+    await _load(silent: true);
   }
 
   Future<void> _retry() async {
@@ -456,7 +491,7 @@ class _StockPageState extends State<StockPage> {
         await widget.session.sync?.pull(_id);
       } catch (_) {}
     }
-    await _load();
+    await _load(silent: products.isNotEmpty || lots.isNotEmpty);
   }
 
   Future<void> _entry() async {
@@ -537,7 +572,7 @@ class _StockPageState extends State<StockPage> {
           ? 'Entrée enregistrée hors ligne (${result['number']}).'
           : 'Entrée enregistrée.'),
     ));
-    await _load();
+    await _afterMutation();
   }
 
   Future<void> _exit() async {
@@ -611,7 +646,7 @@ class _StockPageState extends State<StockPage> {
           ? 'Sortie en file hors ligne (${result['number']}).'
           : (detail.isEmpty ? 'Sortie appliquée selon FEFO.' : 'Lots sortis : $detail')),
     ));
-    await _load();
+    await _afterMutation();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -695,7 +730,7 @@ class _StockPageState extends State<StockPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Transfert créé. Expédiez pour sortir le stock. La destination validera la réception.')),
       );
-      await _load();
+      await _afterMutation();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -721,7 +756,7 @@ class _StockPageState extends State<StockPage> {
       await widget.session.api.post('/stock/transfers/${map['id']}/ship', {'establishmentId': _id});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Expédié. En attente de validation de réception à destination.')));
-      await _load();
+      await _afterMutation();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -750,7 +785,7 @@ class _StockPageState extends State<StockPage> {
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Réception validée. Le stock est entré dans cet établissement.')));
-      await _load();
+      await _afterMutation();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));

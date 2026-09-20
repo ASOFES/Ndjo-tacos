@@ -12,6 +12,8 @@ class Session extends ChangeNotifier {
 
   final Api api;
   final SyncService? sync;
+  /// Bump without rebuilding the app shell — pages listen and refresh silently.
+  final ValueNotifier<int> dataRevision = ValueNotifier(0);
   Map<String, dynamic>? user;
   Map<String, dynamic>? establishment;
   Map<String, dynamic>? appUpdate;
@@ -31,6 +33,10 @@ class Session extends ChangeNotifier {
 
   bool get isAdmin =>
       const {'SUPER_ADMIN', 'ADMIN', 'GESTIONNAIRE'}.contains(role);
+
+  void invalidateData() {
+    dataRevision.value++;
+  }
 
   Future<void> boot() async {
     await Api.restore();

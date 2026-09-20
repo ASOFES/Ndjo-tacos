@@ -270,6 +270,7 @@ class _RecipesPageState extends State<RecipesPage> {
         line.quantity.dispose();
       }
     }
+    widget.session.invalidateData();
     await _load();
   }
 
@@ -300,6 +301,7 @@ class _RecipesPageState extends State<RecipesPage> {
       await widget.session.api.delete('/recipes/$productId');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Composition de $name supprimée.')));
+      widget.session.invalidateData();
       await _load();
     } catch (e) {
       if (!mounted) return;

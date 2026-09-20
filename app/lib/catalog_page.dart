@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'pages.dart';
@@ -42,6 +44,9 @@ class _CatalogPageState extends State<CatalogPage> {
   String? openId;
   String query = '';
   String _dataFp = '';
+  Timer? _poll;
+  int _seenRevision = -1;
+  bool _loadingRemote = false;
 
   String get _id =>
       widget.session.establishmentId ??
@@ -54,7 +59,11 @@ class _CatalogPageState extends State<CatalogPage> {
       final composition = item['composition'] as List? ?? item['recipe']?['items'] as List? ?? const [];
       out.write(item['id']);
       out.write(':');
+      out.write(item['name']);
+      out.write(':');
       out.write(item['status']);
+      out.write(':');
+      out.write(item['priceBuy']);
       out.write(':');
       out.write(item['priceSell']);
       out.write(':');
@@ -67,7 +76,26 @@ class _CatalogPageState extends State<CatalogPage> {
   @override
   void initState() {
     super.initState();
+    _seenRevision = widget.session.dataRevision.value;
+    widget.session.dataRevision.addListener(_onDataRevision);
+    _poll = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) _load(silent: true);
+    });
     _load();
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    widget.session.dataRevision.removeListener(_onDataRevision);
+    super.dispose();
+  }
+
+  void _onDataRevision() {
+    final next = widget.session.dataRevision.value;
+    if (next == _seenRevision) return;
+    _seenRevision = next;
+    if (mounted) _load(silent: true);
   }
 
   @override
@@ -75,11 +103,13 @@ class _CatalogPageState extends State<CatalogPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.session.establishmentId != widget.session.establishmentId) {
       openId = null;
+      _dataFp = '';
       _load();
     }
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool silent = false}) async {
+    if (_loadingRemote && silent) return;
     final store = widget.session.sync?.store;
     final kindQuery = kind == 'TOUS' ? '' : '&kind=$kind';
     var local = store?.allCachedProducts() ?? [];
@@ -88,16 +118,16 @@ class _CatalogPageState extends State<CatalogPage> {
     } else if (kind == 'INGREDIENT') {
       local = local.where((item) => item is Map && item['kind']?.toString() == 'INGREDIENT').toList();
     }
-    categories = widget.session.peekList('categories-$_id');
-    ingredients = (store?.allCachedProducts() ?? []).where((item) => item is Map && item['kind']?.toString() == 'INGREDIENT').toList();
-    if (ingredients.isEmpty) ingredients = widget.session.peekList('ingredients-$_id');
-    components = [
+    final localCategories = widget.session.peekList('categories-$_id');
+    var localIngredients = (store?.allCachedProducts() ?? []).where((item) => item is Map && item['kind']?.toString() == 'INGREDIENT').toList();
+    if (localIngredients.isEmpty) localIngredients = widget.session.peekList('ingredients-$_id');
+    var localComponents = [
       ...((store?.allCachedProducts() ?? []).where((item) => item is Map && item['status']?.toString() != 'SUPPRIME')),
     ];
-    if (components.isEmpty) {
-      components = [
+    if (localComponents.isEmpty) {
+      localComponents = [
         ...local,
-        ...ingredients,
+        ...localIngredients,
       ];
     }
     if (local.isNotEmpty && mounted) {
@@ -105,14 +135,18 @@ class _CatalogPageState extends State<CatalogPage> {
       if (fp != _dataFp || loading) {
         setState(() {
           products = local;
+          categories = localCategories.isNotEmpty ? localCategories : categories;
+          ingredients = localIngredients.isNotEmpty ? localIngredients : ingredients;
+          components = localComponents;
           _dataFp = fp;
           loading = false;
           error = null;
         });
       }
-    } else if (mounted && products.isEmpty) {
+    } else if (!silent && mounted && products.isEmpty) {
       setState(() => loading = true);
     }
+    _loadingRemote = true;
     try {
       if (_id.isNotEmpty) {
         await widget.session.sync?.products(_id);
@@ -145,12 +179,12 @@ class _CatalogPageState extends State<CatalogPage> {
       final nextPublished = (live['products'] as List<dynamic>?) ?? published;
       final nextVersion = live['version']?.toString() ?? publishedVersion;
       final fp = _fingerprint(next);
-      if (fp == _dataFp &&
+      final same = fp == _dataFp &&
           nextCategories.length == categories.length &&
           nextVersion == publishedVersion &&
-          !loading) {
-        return;
-      }
+          !loading;
+      if (same) return;
+      final stillOpen = openId != null && next.any((item) => item is Map && item['id']?.toString() == openId);
       setState(() {
         products = next;
         categories = nextCategories;
@@ -159,6 +193,7 @@ class _CatalogPageState extends State<CatalogPage> {
         published = nextPublished;
         publishedVersion = nextVersion;
         _dataFp = fp;
+        if (!stillOpen) openId = null;
         error = null;
         loading = false;
       });
@@ -175,7 +210,15 @@ class _CatalogPageState extends State<CatalogPage> {
         error = null;
         loading = false;
       });
+    } finally {
+      _loadingRemote = false;
     }
+  }
+
+  Future<void> _afterMutation() async {
+    widget.session.invalidateData();
+    _seenRevision = widget.session.dataRevision.value;
+    await _load(silent: true);
   }
 
   Future<void> _retry() async {
@@ -185,7 +228,7 @@ class _CatalogPageState extends State<CatalogPage> {
         await widget.session.sync?.pull(id);
       } catch (_) {}
     }
-    await _load();
+    await _load(silent: products.isNotEmpty);
   }
 
   Future<void> _publish() async {
@@ -198,7 +241,7 @@ class _CatalogPageState extends State<CatalogPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Catalogue ${draft['code']} publié. Les caisses recevront la fiche complète.')),
     );
-    await _load();
+    await _afterMutation();
   }
 
   Future<void> _edit([Map<String, dynamic>? current]) async {
@@ -214,7 +257,7 @@ class _CatalogPageState extends State<CatalogPage> {
         product: current,
       ),
     );
-    if (saved == true) await _load();
+    if (saved == true) await _afterMutation();
   }
 
   Future<void> _delete(Map<String, dynamic> product) async {
@@ -246,7 +289,7 @@ class _CatalogPageState extends State<CatalogPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Produit ${product['code']} supprimé sur tous les établissements.')),
       );
-      await _load();
+      await _afterMutation();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -281,7 +324,7 @@ class _CatalogPageState extends State<CatalogPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Composition de ${product['name']} supprimée.')),
       );
-      await _load();
+      await _afterMutation();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
