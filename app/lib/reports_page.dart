@@ -32,15 +32,18 @@ class _ReportsPageState extends State<ReportsPage> {
   @override
   void didUpdateWidget(covariant ReportsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _load();
+    if (oldWidget.session.establishmentId != widget.session.establishmentId) {
+      _load();
+    }
   }
 
   Future<void> _load() async {
-    setState(() => loading = true);
     final cached = widget.session.peekMap('reports-$period-$_id');
     if (cached.isNotEmpty) {
       report = cached;
       loading = false;
+    } else if (report == null && mounted) {
+      setState(() => loading = true);
     }
     try {
       final query = _id.isEmpty

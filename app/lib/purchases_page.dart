@@ -33,15 +33,21 @@ class _PurchasesPageState extends State<PurchasesPage> {
   @override
   void didUpdateWidget(covariant PurchasesPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _load();
+    if (oldWidget.session.establishmentId != widget.session.establishmentId) {
+      open = null;
+      _load();
+    }
   }
 
   Future<void> _load() async {
-    setState(() => loading = true);
     suppliers = widget.session.peekList('suppliers-$_id');
     purchases = widget.session.peekList('purchases-$_id');
     products = widget.session.peekList('catalog-$_id-TOUS');
-    if (suppliers.isNotEmpty || purchases.isNotEmpty) loading = false;
+    if (suppliers.isNotEmpty || purchases.isNotEmpty) {
+      loading = false;
+    } else if (mounted && purchases.isEmpty && suppliers.isEmpty) {
+      setState(() => loading = true);
+    }
     try {
       final loaded = await Future.wait([
         widget.session.cachedList('/suppliers?establishmentId=$_id', 'suppliers-$_id'),

@@ -41,10 +41,28 @@ class _CatalogPageState extends State<CatalogPage> {
   String kind = 'TOUS';
   String? openId;
   String query = '';
+  String _dataFp = '';
 
   String get _id =>
       widget.session.establishmentId ??
       (widget.session.establishments.isNotEmpty ? widget.session.establishments.first['id'].toString() : '');
+
+  String _fingerprint(List<dynamic> rows) {
+    final out = StringBuffer();
+    for (final item in rows) {
+      if (item is! Map) continue;
+      final composition = item['composition'] as List? ?? item['recipe']?['items'] as List? ?? const [];
+      out.write(item['id']);
+      out.write(':');
+      out.write(item['status']);
+      out.write(':');
+      out.write(item['priceSell']);
+      out.write(':');
+      out.write(composition.length);
+      out.write(';');
+    }
+    return out.toString();
+  }
 
   @override
   void initState() {
@@ -52,8 +70,16 @@ class _CatalogPageState extends State<CatalogPage> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(covariant CatalogPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session.establishmentId != widget.session.establishmentId) {
+      openId = null;
+      _load();
+    }
+  }
+
   Future<void> _load() async {
-    setState(() => loading = true);
     final store = widget.session.sync?.store;
     final kindQuery = kind == 'TOUS' ? '' : '&kind=$kind';
     var local = store?.allCachedProducts() ?? [];
@@ -62,7 +88,6 @@ class _CatalogPageState extends State<CatalogPage> {
     } else if (kind == 'INGREDIENT') {
       local = local.where((item) => item is Map && item['kind']?.toString() == 'INGREDIENT').toList();
     }
-    products = local;
     categories = widget.session.peekList('categories-$_id');
     ingredients = (store?.allCachedProducts() ?? []).where((item) => item is Map && item['kind']?.toString() == 'INGREDIENT').toList();
     if (ingredients.isEmpty) ingredients = widget.session.peekList('ingredients-$_id');
@@ -71,15 +96,22 @@ class _CatalogPageState extends State<CatalogPage> {
     ];
     if (components.isEmpty) {
       components = [
-        ...products,
+        ...local,
         ...ingredients,
       ];
-    }    if (local.isNotEmpty && mounted) {
-      setState(() {
-        products = local;
-        loading = false;
-        error = null;
-      });
+    }
+    if (local.isNotEmpty && mounted) {
+      final fp = _fingerprint(local);
+      if (fp != _dataFp || loading) {
+        setState(() {
+          products = local;
+          _dataFp = fp;
+          loading = false;
+          error = null;
+        });
+      }
+    } else if (mounted && products.isEmpty) {
+      setState(() => loading = true);
     }
     try {
       if (_id.isNotEmpty) {
@@ -105,20 +137,37 @@ class _CatalogPageState extends State<CatalogPage> {
               ...next,
               ...loaded[2],
             ];
+      final nextCategories = loaded[1].isNotEmpty ? loaded[1] : categories;
+      final nextIngredients = loaded[2].isNotEmpty ? loaded[2] : ingredients;
+      final nextComponents = allProducts
+          .where((item) => item is Map && item['status']?.toString() != 'SUPPRIME')
+          .toList();
+      final nextPublished = (live['products'] as List<dynamic>?) ?? published;
+      final nextVersion = live['version']?.toString() ?? publishedVersion;
+      final fp = _fingerprint(next);
+      if (fp == _dataFp &&
+          nextCategories.length == categories.length &&
+          nextVersion == publishedVersion &&
+          !loading) {
+        return;
+      }
       setState(() {
         products = next;
-        categories = loaded[1].isNotEmpty ? loaded[1] : categories;
-        ingredients = loaded[2].isNotEmpty ? loaded[2] : ingredients;
-        components = allProducts
-            .where((item) => item is Map && item['status']?.toString() != 'SUPPRIME')
-            .toList();
-        published = (live['products'] as List<dynamic>?) ?? published;
-        publishedVersion = live['version']?.toString() ?? publishedVersion;
+        categories = nextCategories;
+        ingredients = nextIngredients;
+        components = nextComponents;
+        published = nextPublished;
+        publishedVersion = nextVersion;
+        _dataFp = fp;
         error = null;
         loading = false;
       });
     } catch (e) {
       if (!mounted) return;
+      if (products.isNotEmpty) {
+        if (loading) setState(() => loading = false);
+        return;
+      }
       final fallback = store?.allCachedProducts() ?? products;
       setState(() {
         products = fallback.isNotEmpty ? fallback : products;

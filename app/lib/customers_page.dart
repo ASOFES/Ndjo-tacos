@@ -34,7 +34,9 @@ class _CustomersPageState extends State<CustomersPage> {
   @override
   void didUpdateWidget(covariant CustomersPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _load();
+    if (oldWidget.session.establishmentId != widget.session.establishmentId) {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -45,7 +47,7 @@ class _CustomersPageState extends State<CustomersPage> {
       zones = cachedZones;
       loading = false;
     }
-    setState(() => loading = customers.isEmpty);
+    if (mounted) setState(() => loading = customers.isEmpty && loading);
     try {
       final loaded = await Future.wait([
         widget.session.cachedList('/customers?establishmentId=$_id', 'customers-$_id'),

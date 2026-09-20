@@ -31,16 +31,20 @@ class _InventoryPageState extends State<InventoryPage> {
   @override
   void didUpdateWidget(covariant InventoryPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _load();
+    if (oldWidget.session.establishmentId != widget.session.establishmentId) {
+      open = null;
+      _load();
+    }
   }
 
   Future<void> _load() async {
-    setState(() => loading = true);
     final cached = widget.session.peekList('inventories-$_id');
     theoretical = widget.session.sync?.store.localStockSummary() ?? [];
     if (cached.isNotEmpty) {
       sessions = cached;
       loading = false;
+    } else if (sessions.isEmpty) {
+      setState(() => loading = true);
     }
     try {
       final list = await widget.session.cachedList('/stock/inventories?establishmentId=$_id', 'inventories-$_id');

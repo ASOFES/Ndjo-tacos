@@ -356,41 +356,61 @@ class _StockPageState extends State<StockPage> {
   List<dynamic> transfers = [];
   String? error;
   bool loading = true;
-  Timer? _poll;
   String query = '';
+  String _dataFp = '';
 
   String get _id => widget.session.establishmentId ?? '';
+
+  String _fingerprint(List<dynamic> a, List<dynamic> b, List<dynamic> c, List<dynamic> d) {
+    String ids(List<dynamic> rows) {
+      final out = StringBuffer();
+      for (final item in rows) {
+        if (item is! Map) continue;
+        out.write(item['id']);
+        out.write(':');
+        out.write(item['stockQty'] ?? item['qtyCurrent'] ?? item['status'] ?? '');
+        out.write(';');
+      }
+      return out.toString();
+    }
+    return '${ids(a)}|${ids(b)}|${ids(c)}|${ids(d)}';
+  }
 
   @override
   void initState() {
     super.initState();
     _load();
-    _poll = Timer.periodic(const Duration(seconds: 8), (_) {
-      if (mounted) _load();
-    });
   }
 
   @override
-  void dispose() {
-    _poll?.cancel();
-    super.dispose();
+  void didUpdateWidget(covariant StockPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session.establishmentId != widget.session.establishmentId) {
+      _load();
+    }
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool silent = false}) async {
     final store = widget.session.sync?.store;
     var localProducts = store?.localStockSummary() ?? [];
     var localLots = store?.allCachedLots(_id) ?? [];
     var localMovements = widget.session.peekList('stock-mov-$_id');
     var localTransfers = widget.session.peekList('stock-tr-$_id');
     if ((localProducts.isNotEmpty || localLots.isNotEmpty) && mounted) {
-      setState(() {
-        products = localProducts;
-        lots = localLots;
-        movements = localMovements;
-        transfers = localTransfers;
-        loading = false;
-        error = null;
-      });
+      final fp = _fingerprint(localProducts, localLots, localMovements, localTransfers);
+      if (!silent || fp != _dataFp || loading) {
+        setState(() {
+          products = localProducts;
+          lots = localLots;
+          movements = localMovements;
+          transfers = localTransfers;
+          _dataFp = fp;
+          loading = false;
+          error = null;
+        });
+      }
+    } else if (!silent && mounted && products.isEmpty) {
+      setState(() => loading = true);
     }
     try {
       final loadedProducts = await widget.session.cachedList('/stock/summary?establishmentId=$_id', 'stock-summary-$_id');
@@ -400,16 +420,25 @@ class _StockPageState extends State<StockPage> {
       if (!mounted) return;
       final nextProducts = loadedProducts.isNotEmpty ? loadedProducts : (store?.localStockSummary() ?? localProducts);
       final nextLots = loadedLots.isNotEmpty ? loadedLots : (store?.allCachedLots(_id) ?? localLots);
+      final nextMovements = loadedMovements.isNotEmpty ? loadedMovements : localMovements;
+      final nextTransfers = loadedTransfers.isNotEmpty ? loadedTransfers : localTransfers;
+      final fp = _fingerprint(nextProducts, nextLots, nextMovements, nextTransfers);
+      if (fp == _dataFp && !loading) return;
       setState(() {
         products = nextProducts;
         lots = nextLots;
-        movements = loadedMovements.isNotEmpty ? loadedMovements : localMovements;
-        transfers = loadedTransfers.isNotEmpty ? loadedTransfers : localTransfers;
+        movements = nextMovements;
+        transfers = nextTransfers;
+        _dataFp = fp;
         loading = false;
         error = null;
       });
     } catch (e) {
       if (!mounted) return;
+      if (products.isNotEmpty || lots.isNotEmpty) {
+        if (loading) setState(() => loading = false);
+        return;
+      }
       final fallback = store?.localStockSummary() ?? products;
       final fallbackLots = store?.allCachedLots(_id) ?? lots;
       setState(() {

@@ -26,8 +26,9 @@ class SyncService {
         return;
       }
       if (results.any((item) => item != ConnectivityResult.none)) {
+        final before = store.pendingCount;
         await flush();
-        onQueueChanged?.call();
+        if (store.pendingCount != before) onQueueChanged?.call();
       }
     });
     _retry = Timer.periodic(const Duration(seconds: 12), (_) async {
@@ -312,6 +313,7 @@ class SyncService {
 
   Future<int> flush() async {
     final pending = store.pending();
+    final before = pending.length;
     var sent = 0;
     for (final operation in pending) {
       final uuid = operation['clientUuid'] as String;
@@ -338,7 +340,7 @@ class SyncService {
         break;
       }
     }
-    onQueueChanged?.call();
+    if (store.pendingCount != before) onQueueChanged?.call();
     return sent;
   }
 
