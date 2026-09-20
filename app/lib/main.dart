@@ -6,6 +6,7 @@ import 'order_alert.dart';
 import 'order_ring.dart';
 import 'offline/local_store.dart';
 import 'offline/sync_service.dart';
+import 'offline/web_backup.dart';
 import 'catalog_page.dart';
 import 'customers_page.dart';
 import 'inventory_pages.dart';
@@ -20,6 +21,18 @@ import 'spec_pages.dart';
 import 'theme.dart';
 
 final localStore = LocalStore();
+
+String? _readNavMenu(String shell) => loadWebBackup('ndjo_nav_$shell');
+
+void _writeNavMenu(String shell, String menuLabel) {
+  saveWebBackup('ndjo_nav_$shell', menuLabel);
+}
+
+int _navIndexFor(List<String> labels, String? saved, {int fallback = 0}) {
+  if (saved == null || saved.isEmpty) return fallback;
+  final i = labels.indexOf(saved);
+  return i >= 0 ? i : fallback;
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -308,12 +321,43 @@ class AdminShell extends StatefulWidget {
 }
 
 class _AdminShellState extends State<AdminShell> {
+  static const _shell = 'admin';
+  static const _labels = [
+    'Tableau de bord',
+    'Rapports',
+    'Organisation',
+    'Utilisateurs',
+    'Permissions',
+    'Catalogue',
+    'Clients',
+    'Recettes',
+    'Stock',
+    'Inventaire',
+    'Pertes',
+    'Achats',
+    'Caisse',
+    'Commandes',
+    'Cuisine',
+    'Livraisons',
+    'Factures',
+    'Mises à jour',
+    'Paramètres',
+    'Synchronisation',
+    'Système',
+  ];
+
   late int index;
 
   @override
   void initState() {
     super.initState();
-    index = localStore.pendingCount > 0 ? 12 : 0;
+    index = _navIndexFor(_labels, _readNavMenu(_shell));
+  }
+
+  void _go(int i) {
+    if (i < 0 || i >= _labels.length) return;
+    setState(() => index = i);
+    _writeNavMenu(_shell, _labels[i]);
   }
 
   @override
@@ -380,7 +424,7 @@ class _AdminShellState extends State<AdminShell> {
                     selected: selected,
                     selectedTileColor: const Color(0xFF3A2A1C),
                     onTap: () {
-                      setState(() => index = i);
+                      _go(i);
                       onPick?.call();
                     },
                     ),
@@ -393,9 +437,9 @@ class _AdminShellState extends State<AdminShell> {
       session: widget.session,
       kitchen: true,
       cashier: true,
-      onOpenKitchen: () => setState(() => index = 14),
-      onOpenCashier: () => setState(() => index = 12),
-      onOpenDriver: () => setState(() => index = 15),
+      onOpenKitchen: () => _go(14),
+      onOpenCashier: () => _go(12),
+      onOpenDriver: () => _go(15),
       child: Scaffold(
       appBar: AppBar(
         title: Text(compact ? items[index].$2 : 'NDJO TACOS'),
@@ -487,7 +531,22 @@ class RoleShell extends StatefulWidget {
 }
 
 class _RoleShellState extends State<RoleShell> {
-  int index = 0;
+  late int index;
+
+  String get _shell => 'role-${widget.title}';
+
+  @override
+  void initState() {
+    super.initState();
+    final labels = widget.pages.map((item) => item.$2).toList();
+    index = _navIndexFor(labels, _readNavMenu(_shell));
+  }
+
+  void _go(int i) {
+    if (i < 0 || i >= widget.pages.length) return;
+    setState(() => index = i);
+    _writeNavMenu(_shell, widget.pages[i].$2);
+  }
 
   int _pageIndex(String label) {
     final i = widget.pages.indexWhere((item) => item.$2 == label);
@@ -502,12 +561,12 @@ class _RoleShellState extends State<RoleShell> {
       kitchen: widget.kitchenAlerts,
       cashier: widget.cashierAlerts,
       driver: widget.driverAlerts,
-      onOpenKitchen: () => setState(() => index = _pageIndex('Cuisine')),
+      onOpenKitchen: () => _go(_pageIndex('Cuisine')),
       onOpenCashier: () {
         final i = widget.pages.indexWhere((item) => item.$2 == 'Caisse');
-        setState(() => index = i >= 0 ? i : _pageIndex('Commandes'));
+        _go(i >= 0 ? i : _pageIndex('Commandes'));
       },
-      onOpenDriver: () => setState(() => index = _pageIndex('Livraisons')),
+      onOpenDriver: () => _go(_pageIndex('Livraisons')),
       child: Scaffold(
       appBar: AppBar(
         title: Text('${widget.title} — NDJO TACOS'),
@@ -521,7 +580,7 @@ class _RoleShellState extends State<RoleShell> {
               children: [
                 NavigationRail(
                   selectedIndex: index,
-                  onDestinationSelected: (value) => setState(() => index = value),
+                  onDestinationSelected: _go,
                   labelType: NavigationRailLabelType.all,
                   destinations: widget.pages.map((item) => NavigationRailDestination(icon: Icon(item.$1), label: Text(item.$2))).toList(),
                 ),
@@ -532,7 +591,7 @@ class _RoleShellState extends State<RoleShell> {
       bottomNavigationBar: compact && widget.pages.length > 1
           ? NavigationBar(
               selectedIndex: index,
-              onDestinationSelected: (value) => setState(() => index = value),
+              onDestinationSelected: _go,
               destinations: widget.pages
                   .map((item) => NavigationDestination(icon: Icon(item.$1), label: item.$2))
                   .toList(),
