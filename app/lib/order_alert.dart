@@ -50,13 +50,17 @@ class OrderAlertHost extends StatefulWidget {
 }
 
 class _OrderAlertHostState extends State<OrderAlertHost> {
-  final Map<String, String> _seen = {};
+  final Map<String, String> _statusById = {};
+  final Set<String> _acked = {};
   Timer? _poll;
   bool _primed = false;
+  bool _busy = false;
   OrderAlert? _alert;
   String? _site;
 
   String get _id => widget.session.establishmentId ?? '';
+
+  String _ackKey(String orderId, String status) => '$orderId#$status';
 
   @override
   void initState() {
@@ -65,7 +69,7 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
     widget.session.addListener(_onSession);
     if (!widget.kitchen && !widget.cashier && !widget.driver) return;
     _tick();
-    _poll = Timer.periodic(const Duration(seconds: 3), (_) {
+    _poll = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) _tick();
     });
   }
@@ -75,7 +79,8 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
     if (next == _site) return;
     _site = next;
     _primed = false;
-    _seen.clear();
+    _statusById.clear();
+    _acked.clear();
     if (mounted) _tick();
   }
 
@@ -87,31 +92,16 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
     super.dispose();
   }
 
-  String _fingerprint(Map<String, dynamic> order) {
-    final items = order['items'] as List<dynamic>? ?? [];
-    final foods = order['kitchenFoods'] as List<dynamic>? ?? [];
-    final lines = items.map((item) {
-      final map = item is Map ? Map<String, dynamic>.from(item) : <String, dynamic>{};
-      return '${map['quantity']}:${map['name']}:${map['unitPrice']}';
-    }).join('|');
-    return [
-      order['id'],
-      order['status'],
-      order['total'],
-      foods.length,
-      order['driverId'] ?? '',
-      order['address'] ?? '',
-      lines,
-      orderShortageMessage(order),
-    ].join('#');
-  }
+  String _statusOf(Map<String, dynamic> order) => order['status']?.toString() ?? '';
 
   void _ingest(List<dynamic> list, Map<String, Map<String, dynamic>> byId) {
     for (final item in list) {
       if (item is! Map) continue;
       final map = Map<String, dynamic>.from(item);
       final id = map['id']?.toString();
-      if (id != null) byId[id] = {...?byId[id], ...map};
+      if (id == null) continue;
+      final prev = byId[id];
+      byId[id] = prev == null ? map : {...prev, ...map};
     }
   }
 
@@ -124,12 +114,14 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
   }
 
   Future<void> _tick() async {
-    if (_id.isEmpty) return;
+    if (_id.isEmpty || _busy) return;
     if (_site != _id) {
       _site = _id;
       _primed = false;
-      _seen.clear();
+      _statusById.clear();
+      _acked.clear();
     }
+    _busy = true;
     try {
       final byId = <String, Map<String, dynamic>>{};
       final fetches = <Future<void>>[];
@@ -151,14 +143,13 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
       if (!_primed) {
         OrderAlert? waiting;
         for (final order in orders) {
-          if (widget.cashier && order['status']?.toString() == 'EN_CAISSE') {
-            waiting = _cashierAlert(order, previous: null);
-          }
-        }
-        for (final order in orders) {
           final id = order['id']?.toString();
+          final status = _statusOf(order);
           if (id == null) continue;
-          _seen[id] = _fingerprint(order);
+          _statusById[id] = status;
+          if (widget.cashier && status == 'EN_CAISSE') {
+            waiting = _cashierAlert(order, fresh: true);
+          }
         }
         _primed = true;
         if (waiting != null) _raise(waiting);
@@ -172,13 +163,16 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
       for (final order in orders) {
         final id = order['id']?.toString();
         if (id == null) continue;
-        _seen[id] = _fingerprint(order);
+        _statusById[id] = _statusOf(order);
       }
       if (next != null) _raise(next);
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _busy = false;
+    }
   }
 
-  OrderAlert _cashierAlert(Map<String, dynamic> order, {required String? previous}) {
+  OrderAlert _cashierAlert(Map<String, dynamic> order, {required bool fresh}) {
     final shortage = orderShortageMessage(order);
     final who = order['customerName']?.toString() ?? order['user']?['name']?.toString() ?? '';
     final items = orderItemsLine(order);
@@ -191,9 +185,9 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
       orderId: order['id'].toString(),
       title: shortage.isNotEmpty
           ? 'Produit en carence'
-          : previous == null
+          : fresh
               ? 'Nouvelle commande caisse'
-              : 'Mise à jour commande',
+              : 'Commande en caisse',
       number: order['number']?.toString() ?? '',
       detail: detail,
       kind: 'cashier',
@@ -203,15 +197,14 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
   OrderAlert? _match(Map<String, dynamic> order) {
     final id = order['id']?.toString();
     if (id == null) return null;
-    final status = order['status']?.toString() ?? '';
-    if (status == 'ANNULEE') return null;
-    final print = _fingerprint(order);
-    final previous = _seen[id];
-    final changed = previous != print;
-    if (!changed) return null;
-    final previousParts = previous?.split('#') ?? const <String>[];
-    final was = previousParts.length > 1 ? previousParts[1] : '';
-    final wasDriver = previousParts.length > 5 ? previousParts[5] : '';
+    final status = _statusOf(order);
+    if (status == 'ANNULEE' || status == 'LIVREE' || status == 'CLOTUREE' || status == 'PAYEE') {
+      return null;
+    }
+    final was = _statusById[id];
+    if (was == status) return null;
+    if (_acked.contains(_ackKey(id, status))) return null;
+
     final number = order['number']?.toString() ?? '';
     final who = order['customerName']?.toString() ?? order['user']?['name']?.toString() ?? '';
     final address = order['address']?.toString() ?? '';
@@ -224,31 +217,20 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
       if (items.isNotEmpty) items,
     ].join('\n');
 
-    if (widget.driver && me != null && driverId == me) {
-      final assignedNow = wasDriver != me;
-      if (assignedNow || previous == null) {
-        return OrderAlert(
-          orderId: id,
-          title: 'Course assignée',
-          number: number,
-          detail: detail,
-          kind: 'driver',
-        );
-      }
+    if (widget.driver && me != null && driverId == me && (was == null || was != status || driverId != me)) {
       return OrderAlert(
         orderId: id,
-        title: 'Mise à jour livraison',
+        title: was == null || (was != 'AFFECTEE' && was != 'EN_LIVRAISON') ? 'Course assignée' : 'Mise à jour livraison',
         number: number,
         detail: detail,
         kind: 'driver',
       );
     }
 
-    if (widget.kitchen && (status == 'NOUVELLE' || status == 'EN_PREPARATION')) {
-      final fresh = previous == null && status == 'NOUVELLE';
+    if (widget.kitchen && status == 'NOUVELLE' && was != 'NOUVELLE') {
       return OrderAlert(
         orderId: id,
-        title: fresh ? 'Nouvelle commande cuisine' : 'Mise à jour cuisine',
+        title: 'Nouvelle commande cuisine',
         number: number,
         detail: detail,
         kind: 'kitchen',
@@ -256,23 +238,13 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
     }
 
     if (widget.cashier && status == 'EN_CAISSE') {
-      return _cashierAlert(order, previous: previous);
+      return _cashierAlert(order, fresh: was == null);
     }
 
-    if (widget.cashier && status == 'PRETE' && (was == 'NOUVELLE' || was == 'EN_PREPARATION')) {
+    if (widget.cashier && status == 'PRETE' && was != 'PRETE') {
       return OrderAlert(
         orderId: id,
         title: 'Cuisine terminée — retour caisse',
-        number: number,
-        detail: detail,
-        kind: 'cashier',
-      );
-    }
-
-    if (widget.cashier && status == 'PRETE' && previous != null && was == 'PRETE') {
-      return OrderAlert(
-        orderId: id,
-        title: 'Mise à jour commande',
         number: number,
         detail: detail,
         kind: 'cashier',
@@ -283,6 +255,8 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
   }
 
   void _raise(OrderAlert alert) {
+    if (_alert?.orderId == alert.orderId && _alert?.title == alert.title) return;
+    if (_acked.contains(_ackKey(alert.orderId, _statusById[alert.orderId] ?? ''))) return;
     NdjoOrderRing.unlock();
     NdjoOrderRing.start();
     setState(() => _alert = alert);
@@ -290,7 +264,12 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
 
   void _dismiss({bool open = false}) {
     NdjoOrderRing.stop();
-    final kind = _alert?.kind;
+    final alert = _alert;
+    if (alert != null) {
+      final status = _statusById[alert.orderId] ?? '';
+      _acked.add(_ackKey(alert.orderId, status));
+    }
+    final kind = alert?.kind;
     setState(() => _alert = null);
     if (!open) return;
     if (kind == 'kitchen') {
