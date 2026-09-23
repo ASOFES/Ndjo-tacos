@@ -46,10 +46,52 @@ Future<void> main() async {
   runApp(NdjoApp(session: Session(api, SyncService(api, localStore))));
 }
 
-class NdjoApp extends StatelessWidget {
+class NdjoApp extends StatefulWidget {
   const NdjoApp({super.key, required this.session});
 
   final Session session;
+
+  @override
+  State<NdjoApp> createState() => _NdjoAppState();
+}
+
+class _NdjoAppState extends State<NdjoApp> {
+  late String _shellSig;
+
+  @override
+  void initState() {
+    super.initState();
+    _shellSig = _sig();
+    widget.session.addListener(_onSession);
+  }
+
+  @override
+  void dispose() {
+    widget.session.removeListener(_onSession);
+    super.dispose();
+  }
+
+  String _sig() {
+    final s = widget.session;
+    return [
+      s.ready,
+      s.user?['id'],
+      s.role,
+      s.clientMode,
+      s.establishmentId,
+      s.selectedEstablishmentId,
+      s.appUpdate?['force'],
+      s.appUpdate?['updateRequired'],
+      s.appUpdate?['updateAvailable'],
+    ].join('|');
+  }
+
+  void _onSession() {
+    final next = _sig();
+    if (next == _shellSig) return;
+    _shellSig = next;
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,13 +99,9 @@ class NdjoApp extends StatelessWidget {
       title: 'NDJO TACOS',
       debugShowCheckedModeBanner: false,
       theme: ndjoTheme(),
-      home: AnimatedBuilder(
-        animation: session,
-        builder: (context, _) {
-          if (!session.ready) return SplashScreen(session: session);
-          return _Home(session: session);
-        },
-      ),
+      home: !widget.session.ready
+          ? SplashScreen(session: widget.session)
+          : _Home(session: widget.session),
     );
   }
 }
@@ -444,11 +482,16 @@ class _AdminShellState extends State<AdminShell> {
       appBar: AppBar(
         title: Text(compact ? items[index].$2 : 'NDJO TACOS'),
         actions: [
-            if (localStore.pendingCount > 0)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Center(child: Text('${localStore.pendingCount} op. en attente', style: const TextStyle(color: NdjoColors.accent, fontSize: 12))),
-              ),
+            ListenableBuilder(
+              listenable: widget.session,
+              builder: (context, _) {
+                if (localStore.pendingCount <= 0) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Center(child: Text('${localStore.pendingCount} op. en attente', style: const TextStyle(color: NdjoColors.accent, fontSize: 12))),
+                );
+              },
+            ),
             if (!compact)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),

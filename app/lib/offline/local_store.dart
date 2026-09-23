@@ -335,7 +335,13 @@ class LocalStore {
         addAll(entry.value);
       }
     }
-    return byId.values.toList();
+    final list = byId.values.toList();
+    list.sort((a, b) {
+      final aid = a is Map ? a['id']?.toString() ?? '' : '';
+      final bid = b is Map ? b['id']?.toString() ?? '' : '';
+      return aid.compareTo(bid);
+    });
+    return list;
   }
 
   List<dynamic> _filterCatalog(List<dynamic> rows, String key) {

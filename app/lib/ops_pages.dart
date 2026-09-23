@@ -358,7 +358,6 @@ class _StockPageState extends State<StockPage> {
   bool loading = true;
   String query = '';
   String _dataFp = '';
-  Timer? _poll;
   int _seenRevision = -1;
   bool _loadingRemote = false;
 
@@ -366,9 +365,10 @@ class _StockPageState extends State<StockPage> {
 
   String _fingerprint(List<dynamic> a, List<dynamic> b, List<dynamic> c, List<dynamic> d) {
     String ids(List<dynamic> rows) {
+      final maps = rows.whereType<Map>().toList()
+        ..sort((x, y) => (x['id']?.toString() ?? '').compareTo(y['id']?.toString() ?? ''));
       final out = StringBuffer();
-      for (final item in rows) {
-        if (item is! Map) continue;
+      for (final item in maps) {
         out.write(item['id']);
         out.write(':');
         out.write(item['stockQty'] ?? item['qtyCurrent'] ?? item['status'] ?? '');
@@ -386,15 +386,11 @@ class _StockPageState extends State<StockPage> {
     super.initState();
     _seenRevision = widget.session.dataRevision.value;
     widget.session.dataRevision.addListener(_onDataRevision);
-    _poll = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (mounted) _load(silent: true);
-    });
     _load();
   }
 
   @override
   void dispose() {
-    _poll?.cancel();
     widget.session.dataRevision.removeListener(_onDataRevision);
     super.dispose();
   }
@@ -422,20 +418,17 @@ class _StockPageState extends State<StockPage> {
     var localLots = store?.allCachedLots(_id) ?? [];
     var localMovements = widget.session.peekList('stock-mov-$_id');
     var localTransfers = widget.session.peekList('stock-tr-$_id');
-    if ((localProducts.isNotEmpty || localLots.isNotEmpty) && mounted) {
-      final fp = _fingerprint(localProducts, localLots, localMovements, localTransfers);
-      if (fp != _dataFp || loading) {
-        setState(() {
-          products = localProducts;
-          lots = localLots;
-          movements = localMovements;
-          transfers = localTransfers;
-          _dataFp = fp;
-          loading = false;
-          error = null;
-        });
-      }
-    } else if (!silent && mounted && products.isEmpty) {
+    if (products.isEmpty && lots.isEmpty && (localProducts.isNotEmpty || localLots.isNotEmpty) && mounted) {
+      setState(() {
+        products = localProducts;
+        lots = localLots;
+        movements = localMovements;
+        transfers = localTransfers;
+        _dataFp = _fingerprint(localProducts, localLots, localMovements, localTransfers);
+        loading = false;
+        error = null;
+      });
+    } else if (!silent && mounted && products.isEmpty && lots.isEmpty) {
       setState(() => loading = true);
     }
     _loadingRemote = true;
@@ -794,7 +787,7 @@ class _StockPageState extends State<StockPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
+    if (loading && products.isEmpty && lots.isEmpty) return const Center(child: CircularProgressIndicator());
     if (error != null) return _Retry(error: error!, onRetry: _retry);
     final compact = ndjoCompact(context);
     final incoming = [

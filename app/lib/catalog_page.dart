@@ -53,15 +53,20 @@ class _CatalogPageState extends State<CatalogPage> {
       (widget.session.establishments.isNotEmpty ? widget.session.establishments.first['id'].toString() : '');
 
   String _fingerprint(List<dynamic> rows) {
+    final maps = rows.whereType<Map>().toList()
+      ..sort((a, b) => (a['id']?.toString() ?? '').compareTo(b['id']?.toString() ?? ''));
     final out = StringBuffer();
-    for (final item in rows) {
-      if (item is! Map) continue;
+    for (final item in maps) {
       final composition = item['composition'] as List? ?? item['recipe']?['items'] as List? ?? const [];
       out.write(item['id']);
       out.write(':');
       out.write(item['name']);
       out.write(':');
+      out.write(item['code']);
+      out.write(':');
       out.write(item['status']);
+      out.write(':');
+      out.write(item['kind']);
       out.write(':');
       out.write(item['priceBuy']);
       out.write(':');
@@ -73,12 +78,26 @@ class _CatalogPageState extends State<CatalogPage> {
     return out.toString();
   }
 
+  List<dynamic> _stableProducts(List<dynamic> rows) {
+    final list = rows
+        .where((item) => item is Map && item['status']?.toString() != 'SUPPRIME')
+        .toList();
+    list.sort((a, b) {
+      final am = a as Map;
+      final bm = b as Map;
+      final byName = (am['name']?.toString() ?? '').toLowerCase().compareTo((bm['name']?.toString() ?? '').toLowerCase());
+      if (byName != 0) return byName;
+      return (am['id']?.toString() ?? '').compareTo(bm['id']?.toString() ?? '');
+    });
+    return list;
+  }
+
   @override
   void initState() {
     super.initState();
     _seenRevision = widget.session.dataRevision.value;
     widget.session.dataRevision.addListener(_onDataRevision);
-    _poll = Timer.periodic(const Duration(seconds: 10), (_) {
+    _poll = Timer.periodic(const Duration(seconds: 45), (_) {
       if (mounted) _load(silent: true);
     });
     _load();
@@ -118,6 +137,7 @@ class _CatalogPageState extends State<CatalogPage> {
     } else if (kind == 'INGREDIENT') {
       local = local.where((item) => item is Map && item['kind']?.toString() == 'INGREDIENT').toList();
     }
+    local = _stableProducts(local);
     final localCategories = widget.session.peekList('categories-$_id');
     var localIngredients = (store?.allCachedProducts() ?? []).where((item) => item is Map && item['kind']?.toString() == 'INGREDIENT').toList();
     if (localIngredients.isEmpty) localIngredients = widget.session.peekList('ingredients-$_id');
@@ -130,28 +150,22 @@ class _CatalogPageState extends State<CatalogPage> {
         ...localIngredients,
       ];
     }
-    if (local.isNotEmpty && mounted) {
+    if (products.isEmpty && local.isNotEmpty && mounted) {
       final fp = _fingerprint(local);
-      if (fp != _dataFp || loading) {
-        setState(() {
-          products = local;
-          categories = localCategories.isNotEmpty ? localCategories : categories;
-          ingredients = localIngredients.isNotEmpty ? localIngredients : ingredients;
-          components = localComponents;
-          _dataFp = fp;
-          loading = false;
-          error = null;
-        });
-      }
+      setState(() {
+        products = local;
+        categories = localCategories.isNotEmpty ? localCategories : categories;
+        ingredients = localIngredients.isNotEmpty ? localIngredients : ingredients;
+        components = localComponents;
+        _dataFp = fp;
+        loading = false;
+        error = null;
+      });
     } else if (!silent && mounted && products.isEmpty) {
       setState(() => loading = true);
     }
     _loadingRemote = true;
     try {
-      if (_id.isNotEmpty) {
-        await widget.session.sync?.products(_id);
-        local = store?.allCachedProducts() ?? local;
-      }
       final loaded = await Future.wait([
         widget.session.cachedList('/catalog/products?establishmentId=$_id$kindQuery', 'catalog-$_id-$kind'),
         widget.session.cachedList('/catalog/categories?establishmentId=$_id', 'categories-$_id'),
@@ -165,6 +179,7 @@ class _CatalogPageState extends State<CatalogPage> {
       if (!mounted) return;
       var next = loaded[0].isNotEmpty ? loaded[0] : local;
       if (next.isEmpty) next = store?.allCachedProducts() ?? [];
+      next = _stableProducts(next);
       final allProducts = loaded[3].isNotEmpty
           ? loaded[3]
           : [
@@ -333,7 +348,7 @@ class _CatalogPageState extends State<CatalogPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
+    if (loading && products.isEmpty) return const Center(child: CircularProgressIndicator());
     if (error != null) return _ErrorBox(error: error!, onRetry: _retry);
     final selected = products.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).where((item) => item['id'] == openId);
     final sheet = selected.isEmpty ? null : selected.first;
@@ -499,6 +514,7 @@ class _CatalogPageState extends State<CatalogPage> {
                               ? 'Aucune'
                               : '$lines ingrédients';
                       return DataRow(
+                        key: ValueKey(product['id']?.toString() ?? product['code']?.toString() ?? product['name']),
                         selected: product['id'] == openId,
                         onSelectChanged: (_) => setState(() => openId = product['id'].toString()),
                         cells: [
