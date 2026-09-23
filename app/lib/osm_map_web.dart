@@ -90,10 +90,9 @@ String _leafletHtml(List<OsmMarker> markers, List<OsmLatLng> path) {
     (function () {
       var data = $payload;
       var map = L.map('map', { zoomControl: true });
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noreferrer">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 20
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tuiles &copy; Esri',
+        maxZoom: 19
       }).addTo(map);
       var bounds = [];
       (data.markers || []).forEach(function (marker) {
