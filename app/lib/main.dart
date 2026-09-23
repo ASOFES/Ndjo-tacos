@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'pages.dart';
 import 'order_alert.dart';
 import 'order_ring.dart';
 import 'offline/local_store.dart';
 import 'offline/sync_service.dart';
 import 'offline/web_backup.dart';
+import 'clear_stuck_data.dart';
 import 'catalog_page.dart';
 import 'customers_page.dart';
 import 'inventory_pages.dart';
@@ -574,6 +576,7 @@ class _AdminShellState extends State<AdminShell> {
                 ),
               ],
             ),
+          NdjoRefreshButton(session: widget.session, iconOnly: true),
           IconButton(onPressed: widget.session.logout, icon: const Icon(Icons.logout)),
         ],
       ),
@@ -683,7 +686,10 @@ class _RoleShellState extends State<RoleShell> {
       child: Scaffold(
       appBar: AppBar(
         title: Text('${widget.title} — NDJO TACOS'),
-        actions: [IconButton(onPressed: widget.session.logout, icon: const Icon(Icons.logout))],
+        actions: [
+          NdjoRefreshButton(session: widget.session, iconOnly: true),
+          IconButton(onPressed: widget.session.logout, icon: const Icon(Icons.logout)),
+        ],
       ),
       body: compact || widget.pages.length == 1
           ? _keptPages()

@@ -620,7 +620,7 @@ class _DashboardPageState extends State<DashboardPage> {
         const SizedBox(height: 12),
         Align(
           alignment: Alignment.centerLeft,
-          child: NdjoClearStuckDataButton(session: widget.session),
+          child: NdjoRefreshButton(session: widget.session),
         ),
         if (stats!['offline'] == true || pending.isNotEmpty) ...[
           const SizedBox(height: 12),

@@ -96,7 +96,7 @@ class _SyncCenterPageState extends State<SyncCenterPage> {
               ),
             const SizedBox(height: 8),
             const Text(
-              'Pour supprimer les données bloquées : bouton rouge sur Tableau de bord ou Caisse.',
+              'Pour recharger les données : bouton Actualiser en haut de l’écran, sur le tableau de bord ou à la caisse.',
               style: TextStyle(color: NdjoColors.muted, fontSize: 12),
             ),
           ],

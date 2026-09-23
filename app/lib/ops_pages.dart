@@ -1441,7 +1441,7 @@ class _PosPageState extends State<PosPage> {
     final menu = [
                     const Text('Caisse', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
-                    NdjoClearStuckDataButton(session: widget.session),
+                    NdjoRefreshButton(session: widget.session),
                     const SizedBox(height: 8),
                     ndjoExportButtons(
                       onExcel: () => downloadNdjoExport(context, widget.session, kind: 'sales', format: 'xls', period: 'jour'),
