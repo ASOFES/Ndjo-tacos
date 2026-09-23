@@ -74,8 +74,10 @@ export function renderTrackHtml(view: TrackView) {
       var data = window.__NDJO_TRACK__;
       var dest = [data.destination.latitude, data.destination.longitude];
       var map = L.map('map').setView(data.location ? [data.location.latitude, data.location.longitude] : dest, 14);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap'
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
       }).addTo(map);
       var destMarker = L.marker(dest).addTo(map).bindPopup('Destination');
       var driverMarker = null;
