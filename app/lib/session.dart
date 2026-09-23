@@ -39,6 +39,11 @@ class Session extends ChangeNotifier {
     dataRevision.value++;
   }
 
+  void _onSyncQueue() {
+    notifyListeners();
+    invalidateData();
+  }
+
   Future<void> boot() async {
     await Api.restore();
     final prefs = await SharedPreferences.getInstance();
@@ -47,7 +52,7 @@ class Session extends ChangeNotifier {
     api.onRefresh = _refreshTokens;
     _restoreLocal(prefs);
     appUpdate = {'updateAvailable': false};
-    sync?.onQueueChanged = notifyListeners;
+    sync?.onQueueChanged = _onSyncQueue;
     sync?.startWatcher();
     ready = true;
     notifyListeners();
@@ -102,7 +107,7 @@ class Session extends ChangeNotifier {
     final id = establishmentId;
     if (id != null) await sync?.pull(id);
     await _heartbeat();
-    sync?.onQueueChanged = notifyListeners;
+    sync?.onQueueChanged = _onSyncQueue;
     sync?.startWatcher();
     _startHeartbeatLoop();
     notifyListeners();

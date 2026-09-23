@@ -627,12 +627,16 @@ class _DashboardPageState extends State<DashboardPage> {
           Card(
             child: ListTile(
               leading: Icon(stats!['offline'] == true && pending.isEmpty ? Icons.cloud_off : Icons.sync),
-              title: Text('${pending.length} opération(s) en attente de confirmation'),
+              title: Text(
+                pending.isEmpty
+                    ? 'Serveur momentanément injoignable'
+                    : '${pending.length} opération(s) en cours de synchronisation',
+              ),
               subtitle: Text(
                 pending.isEmpty
                     ? 'API indisponible. Données locales affichées.'
                     : (widget.session.sync?.lastPendingError ??
-                        pending.map((item) => '${item['number']} · ${item['status']}').join('\n')),
+                        'Connexion détectée : envoi immédiat au serveur.'),
               ),
             ),
           ),

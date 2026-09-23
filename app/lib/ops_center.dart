@@ -81,7 +81,7 @@ class _SyncCenterPageState extends State<SyncCenterPage> {
             const Text('Base locale de cet appareil', style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             const Text(
-              'Copie temporaire (PC : navigateur / téléphone : fichiers Hive). Les écrans lisent ces données hors ligne. Les ventes, stocks, cuisine et livraisons partent en file puis se synchronisent au retour du réseau.',
+              'Copie temporaire (PC : navigateur / téléphone : fichiers Hive). Les écrans lisent ces données hors ligne. Dès que le serveur répond, la file part tout de suite — pas besoin d’attendre le prochain cycle.',
               style: TextStyle(color: NdjoColors.muted),
             ),
             const SizedBox(height: 12),
@@ -150,8 +150,8 @@ class _SyncCenterPageState extends State<SyncCenterPage> {
         Card(
           child: ListTile(
             leading: const Icon(Icons.cloud_sync),
-            title: Text('${localPending.length} opération(s) locales en attente'),
-            subtitle: const Text('File Hive de cet appareil. Reprise automatique au retour du réseau.'),
+            title: Text('${localPending.length} opération(s) locales à synchroniser'),
+            subtitle: const Text('Dès que le serveur répond, l’envoi est immédiat. Le Wi‑Fi seul ne suffit pas : l’API doit répondre.'),
             trailing: TextButton(
               onPressed: () async {
                 await widget.session.sync?.flush();

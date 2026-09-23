@@ -14,34 +14,35 @@ class SyncService {
   final _uuid = const Uuid();
   StreamSubscription<List<ConnectivityResult>>? _network;
   Timer? _retry;
+  Timer? _flushSoon;
+  bool _flushBusy = false;
   void Function()? onQueueChanged;
 
   void startWatcher() {
     _network?.cancel();
     _retry?.cancel();
-    var skipBootEvent = true;
+    unawaited(flush());
     _network = Connectivity().onConnectivityChanged.listen((results) async {
-      if (skipBootEvent) {
-        skipBootEvent = false;
-        return;
-      }
-      if (results.any((item) => item != ConnectivityResult.none)) {
-        final before = store.pendingCount;
-        await flush();
-        if (store.pendingCount != before) onQueueChanged?.call();
-      }
+      final online = results.any((item) => item != ConnectivityResult.none);
+      if (online || store.pendingCount > 0) await flush();
     });
-    _retry = Timer.periodic(const Duration(seconds: 12), (_) async {
+    _retry = Timer.periodic(const Duration(seconds: 3), (_) async {
       if (store.pendingCount == 0) return;
-      final before = store.pendingCount;
       await flush();
-      if (store.pendingCount != before) onQueueChanged?.call();
+    });
+  }
+
+  void kickFlush() {
+    _flushSoon?.cancel();
+    _flushSoon = Timer(const Duration(milliseconds: 120), () {
+      unawaited(flush());
     });
   }
 
   void dispose() {
     _network?.cancel();
     _retry?.cancel();
+    _flushSoon?.cancel();
   }
 
   Future<List<dynamic>> products(String establishmentId) async {
@@ -129,12 +130,12 @@ class SyncService {
       final applied = await _pushOne(clientUuid, 'ORDER', payload);
       if (applied != null) return applied;
     } on ApiException catch (error) {
-      if (_isUnreachable(error)) return {...local, 'offline': true};
-      await _forgetLocal(clientUuid, establishmentId);
-      rethrow;
-    } catch (_) {
-      return {...local, 'offline': true};
-    }
+      if (!_isUnreachable(error)) {
+        await _forgetLocal(clientUuid, establishmentId);
+        rethrow;
+      }
+    } catch (_) {}
+    kickFlush();
     return {...local, 'offline': true};
   }
 
@@ -268,6 +269,7 @@ class SyncService {
     } on ApiException {
       rethrow;
     } catch (_) {}
+    kickFlush();
     return {
       'offline': true,
       'clientUuid': clientUuid,
@@ -312,36 +314,39 @@ class SyncService {
   }
 
   Future<int> flush() async {
+    if (_flushBusy) return 0;
     final pending = store.pending();
+    if (pending.isEmpty) return 0;
+    _flushBusy = true;
     final before = pending.length;
     var sent = 0;
-    for (final operation in pending) {
-      final uuid = operation['clientUuid'] as String;
-      if ((operation['retries'] as int? ?? 0) >= 8) {
-        await store.markRetry(uuid, operation['error']?.toString() ?? 'Trop de tentatives — file conservée');
-        continue;
-      }
-      try {
-        final applied = await _pushOne(
-          uuid,
-          operation['type'] as String,
-          Map<String, dynamic>.from(operation['payload'] as Map),
-        );
-        if (applied != null) sent++;
-      } catch (error) {
-        if (error is ApiException) {
-          if (_isUnreachable(error)) {
-            await store.markRetry(uuid, error.toString());
-            break;
+    try {
+      for (final operation in store.pending()) {
+        final uuid = operation['clientUuid'] as String;
+        try {
+          final applied = await _pushOne(
+            uuid,
+            operation['type'] as String,
+            Map<String, dynamic>.from(operation['payload'] as Map),
+          );
+          if (applied != null) sent++;
+        } catch (error) {
+          if (error is ApiException) {
+            if (_isUnreachable(error)) {
+              await store.markRetry(uuid, error.toString());
+              break;
+            }
+            continue;
           }
-          continue;
+          await store.markRetry(uuid, error.toString());
+          break;
         }
-        await store.markRetry(uuid, error.toString());
-        break;
       }
+      if (store.pendingCount != before) onQueueChanged?.call();
+      return sent;
+    } finally {
+      _flushBusy = false;
     }
-    if (store.pendingCount != before) onQueueChanged?.call();
-    return sent;
   }
 
   String? get lastPendingError {

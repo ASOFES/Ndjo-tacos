@@ -1388,7 +1388,7 @@ class _PosPageState extends State<PosPage> {
     created['customerPhone'] ??= selectedCustomer?['phone'] ?? phoneCtrl.text;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(offline
-          ? 'Vente en attente de confirmation serveur (${order['number']}). Pas hors ligne : nouvelle tentative automatique.'
+          ? 'Connexion OK — confirmation serveur en cours (${order['number']}). Nouvelle tentative immédiate.'
           : pending
               ? 'Commande ${order['number']} · paiement EN_ATTENTE${checkout?['operatorRef'] != null ? ' · réf. ${checkout!['operatorRef']}' : ''}${checkout?['checkoutUrl'] != null ? ' · ${checkout!['checkoutUrl']}' : ''}.'
               : 'Commande ${order['number']} enregistrée. Paiement encaissé.'),
@@ -1457,10 +1457,10 @@ class _PosPageState extends State<PosPage> {
                 Card(
                   child: ListTile(
                     leading: const Icon(Icons.sync),
-                    title: Text('$pendingOps opération(s) en attente de confirmation'),
+                    title: Text('$pendingOps opération(s) en cours de synchronisation'),
                     subtitle: Text(
                       widget.session.sync?.lastPendingError ??
-                          'Vous êtes en ligne. La vente n’est pas encore enregistrée sur le serveur — nouvelle tentative automatique.',
+                          'Connexion détectée : enregistrement immédiat sur le serveur, pas un mode hors ligne.',
                     ),
                     trailing: TextButton(
                       onPressed: () async {

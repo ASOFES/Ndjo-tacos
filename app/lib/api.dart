@@ -115,6 +115,9 @@ class Api {
           body: jsonEncode(body ?? {}),
         ),
       skipRefresh: skipRefresh,
+      timeout: path.contains('/sync/')
+          ? const Duration(seconds: 30)
+          : const Duration(seconds: 20),
     );
     return _decode(response);
   }
@@ -162,7 +165,7 @@ class Api {
   Future<http.Response> _send(
     Future<http.Response> Function() request, {
     bool skipRefresh = false,
-    Duration timeout = const Duration(seconds: 8),
+    Duration timeout = const Duration(seconds: 20),
   }) async {
     try {
       var response = await request().timeout(timeout);
