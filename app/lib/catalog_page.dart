@@ -98,7 +98,7 @@ class _CatalogPageState extends State<CatalogPage> {
     _seenRevision = widget.session.dataRevision.value;
     widget.session.dataRevision.addListener(_onDataRevision);
     _poll = Timer.periodic(const Duration(seconds: 45), (_) {
-      if (mounted) _load(silent: true);
+      if (mounted && ndjoPageVisible(context)) _load(silent: true);
     });
     _load();
   }

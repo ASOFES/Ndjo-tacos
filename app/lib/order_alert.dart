@@ -284,11 +284,11 @@ class _OrderAlertHostState extends State<OrderAlertHost> {
   @override
   Widget build(BuildContext context) {
     return Listener(
-      behavior: HitTestBehavior.translucent,
+      behavior: HitTestBehavior.deferToChild,
       onPointerDown: (_) => NdjoOrderRing.unlock(),
       child: Stack(
         children: [
-          widget.child,
+          RepaintBoundary(child: widget.child),
           if (_alert != null) _banner(_alert!),
         ],
       ),

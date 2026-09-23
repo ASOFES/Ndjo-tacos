@@ -255,7 +255,7 @@ class _CustomersPageState extends State<CustomersPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
+    if (loading && customers.isEmpty) return const Center(child: CircularProgressIndicator());
     if (error != null) {
       return Center(
         child: Column(

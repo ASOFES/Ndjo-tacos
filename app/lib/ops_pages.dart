@@ -112,7 +112,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
+    if (loading && establishments.isEmpty) return const Center(child: CircularProgressIndicator());
     if (error != null) return _Retry(error: error!, onRetry: _load);
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -296,7 +296,7 @@ class _UsersPageState extends State<UsersPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
+    if (loading && users.isEmpty) return const Center(child: CircularProgressIndicator());
     if (error != null) return _Retry(error: error!, onRetry: _load);
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -1068,7 +1068,7 @@ class _PosPageState extends State<PosPage> {
     widget.session.addListener(_onSite);
     _load();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (mounted) _load();
+      if (mounted && ndjoPageVisible(context)) _load();
     });
   }
 
@@ -1092,13 +1092,18 @@ class _PosPageState extends State<PosPage> {
     final localSales = sync?.pendingSales() ?? [];
     final localProducts = sync?.store.readCatalog(_id) ?? [];
     if (mounted) {
-      setState(() {
-        products = localProducts.isNotEmpty ? localProducts : products;
-        customers = sync?.store.readList('customers-$_id') ?? customers;
-        zones = sync?.store.readList('zones-$_id') ?? zones;
-        loading = false;
-        error = null;
-      });
+      final nextProducts = localProducts.isNotEmpty ? localProducts : products;
+      final nextCustomers = sync?.store.readList('customers-$_id') ?? customers;
+      final nextZones = sync?.store.readList('zones-$_id') ?? zones;
+      if (products.isEmpty || customers.isEmpty) {
+        setState(() {
+          products = nextProducts;
+          customers = nextCustomers;
+          zones = nextZones;
+          loading = false;
+          error = null;
+        });
+      }
     }
     try {
       final loadedProducts = sync != null
@@ -1139,11 +1144,21 @@ class _PosPageState extends State<PosPage> {
           ? await sync.cachedOrFetch('/delivery-zones?establishmentId=$_id', 'zones-$_id')
           : await widget.session.api.getList('/delivery-zones?establishmentId=$_id');
       if (!mounted) return;
+      final nextProducts = loadedProducts.isNotEmpty ? loadedProducts : products;
+      final nextCustomers = loadedCustomers.isNotEmpty ? loadedCustomers : customers;
+      final nextZones = loadedZones.isNotEmpty ? loadedZones : zones;
+      if (ndjoRowsFp(nextProducts) == ndjoRowsFp(products) &&
+          ndjoRowsFp(merged) == ndjoRowsFp(orders) &&
+          ndjoRowsFp(nextCustomers) == ndjoRowsFp(customers) &&
+          ndjoRowsFp(nextZones) == ndjoRowsFp(zones) &&
+          !loading) {
+        return;
+      }
       setState(() {
-        products = loadedProducts.isNotEmpty ? loadedProducts : products;
+        products = nextProducts;
         orders = merged;
-        customers = loadedCustomers.isNotEmpty ? loadedCustomers : customers;
-        zones = loadedZones.isNotEmpty ? loadedZones : zones;
+        customers = nextCustomers;
+        zones = nextZones;
         loading = false;
         error = null;
       });
@@ -1761,7 +1776,7 @@ class _KitchenPageState extends State<KitchenPage> {
     if (orders.isNotEmpty) loading = false;
     _load();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (mounted) _load();
+      if (mounted && ndjoPageVisible(context)) _load();
     });
   }
 
@@ -1794,6 +1809,7 @@ class _KitchenPageState extends State<KitchenPage> {
         }),
       ];
       if (!mounted) return;
+      if (ndjoRowsFp(merged) == ndjoRowsFp(orders) && !loading) return;
       setState(() {
         orders = merged;
         loading = false;
@@ -1837,7 +1853,7 @@ class _KitchenPageState extends State<KitchenPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
+    if (loading && orders.isEmpty) return const Center(child: CircularProgressIndicator());
     if (error != null) return _Retry(error: error!, onRetry: _load);
     List<dynamic> column(String status) =>
         orders.where((item) => item['status']?.toString() == status).toList();

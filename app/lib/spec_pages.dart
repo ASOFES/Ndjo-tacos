@@ -311,7 +311,7 @@ class _RecipesPageState extends State<RecipesPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
+    if (loading && recipes.isEmpty) return const Center(child: CircularProgressIndicator());
     if (error != null) return Center(child: Text(error!));
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -426,7 +426,7 @@ class _OrdersPageState extends State<OrdersPage> {
     ];
     _load();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (mounted) _load();
+      if (mounted && ndjoPageVisible(context)) _load();
     });
   }
 
@@ -450,8 +450,7 @@ class _OrdersPageState extends State<OrdersPage> {
           if (item is Map) item['id']?.toString(),
       }.whereType<String>().toSet();
       if (!mounted) return;
-      setState(() {
-        orders = [
+      final next = [
           ...pending,
           ...inbox.where((item) {
             if (item is! Map) return false;
@@ -466,6 +465,9 @@ class _OrdersPageState extends State<OrdersPage> {
                 !inboxIds.contains(id);
           }),
         ];
+      if (ndjoRowsFp(next) == ndjoRowsFp(orders)) return;
+      setState(() {
+        orders = next;
       });
     } catch (_) {
       if (!mounted) return;
@@ -612,7 +614,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
     super.initState();
     _load();
     _poll = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted) _load();
+      if (mounted && ndjoPageVisible(context)) _load();
     });
     if (widget.session.role == 'LIVREUR') {
       _gpsTimer = Timer.periodic(const Duration(seconds: 15), (_) => _pushActiveGps());
@@ -628,8 +630,6 @@ class _DeliveryPageState extends State<DeliveryPage> {
 
   Future<void> _load() async {
     final id = widget.session.establishmentId;
-    deliveries = widget.session.peekList('delivery-$id');
-    drivers = widget.session.peekList('drivers-$id');
     try {
       final loadedDeliveries = await widget.session.cachedList('/delivery?establishmentId=$id', 'delivery-$id');
       List<dynamic> loadedDrivers = [];
@@ -646,14 +646,23 @@ class _DeliveryPageState extends State<DeliveryPage> {
       if (liveAvailability != null) {
         widget.session.user?['availability'] = liveAvailability;
       }
+      final nextDeliveries = loadedDeliveries.isNotEmpty ? loadedDeliveries : deliveries;
+      final nextDrivers = loadedDrivers.isNotEmpty ? loadedDrivers : drivers;
+      final nextAvailability = liveAvailability ?? widget.session.user?['availability']?.toString() ?? 'HORS_LIGNE';
+      if (ndjoRowsFp(nextDeliveries) == ndjoRowsFp(deliveries) &&
+          ndjoRowsFp(nextDrivers) == ndjoRowsFp(drivers) &&
+          nextAvailability == availability) {
+        return;
+      }
       setState(() {
-        deliveries = loadedDeliveries.isNotEmpty ? loadedDeliveries : deliveries;
-        drivers = loadedDrivers.isNotEmpty ? loadedDrivers : drivers;
-        availability = liveAvailability ?? widget.session.user?['availability']?.toString() ?? 'HORS_LIGNE';
+        deliveries = nextDeliveries;
+        drivers = nextDrivers;
+        availability = nextAvailability;
         error = null;
       });
     } catch (e) {
-      setState(() => error = null);
+      if (!mounted) return;
+      if (error != null) setState(() => error = null);
     }
   }
 

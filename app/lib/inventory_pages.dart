@@ -580,7 +580,7 @@ class _LossesPageState extends State<LossesPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
+    if (loading && losses.isEmpty && lots.isEmpty) return const Center(child: CircularProgressIndicator());
     if (error != null) {
       return ListView(
         padding: const EdgeInsets.all(24),

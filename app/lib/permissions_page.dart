@@ -83,7 +83,7 @@ class _PermissionsPageState extends State<PermissionsPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
+    if (loading && matrix == null) return const Center(child: CircularProgressIndicator());
     final permissions = (matrix?['permissions'] as List<dynamic>? ?? [])
         .where((item) => item['key'] != '*')
         .toList();

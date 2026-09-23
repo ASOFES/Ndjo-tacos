@@ -6,6 +6,21 @@ import 'export_file.dart';
 import 'session.dart';
 import 'theme.dart';
 
+bool ndjoPageVisible(BuildContext context) => TickerMode.of(context);
+
+String ndjoRowsFp(Iterable<dynamic> rows) {
+  final maps = rows.whereType<Map>().toList()
+    ..sort((a, b) => (a['id']?.toString() ?? '').compareTo(b['id']?.toString() ?? ''));
+  final out = StringBuffer();
+  for (final item in maps) {
+    out.write(item['id']);
+    out.write(':');
+    out.write(item['status'] ?? item['updatedAt'] ?? item['availability'] ?? item['stockQty'] ?? '');
+    out.write(';');
+  }
+  return out.toString();
+}
+
 String recipeQty(num quantity, String unit) {
   if (unit == 'kg') return '${(quantity * 1000).round()} g';
   if (quantity == quantity.roundToDouble()) return '${quantity.round()} $unit';
@@ -787,7 +802,7 @@ class _UpdatesPageState extends State<UpdatesPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
+    if (loading && versions.isEmpty && publications.isEmpty) return const Center(child: CircularProgressIndicator());
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -948,7 +963,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
+    if (loading && values.isEmpty) return const Center(child: CircularProgressIndicator());
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 
 import 'api.dart';
 import 'order_alert.dart';
@@ -36,7 +35,6 @@ int _navIndexFor(List<String> labels, String? saved, {int fallback = 0}) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SemanticsBinding.instance.ensureSemantics();
   localStore.restoreFromDom();
   try {
     await LocalStore.init();
@@ -161,25 +159,25 @@ class _Home extends StatelessWidget {
     }
     switch (session.role) {
       case 'CAISSIER':
-        return RoleShell(session: session, title: 'Caisse', cashierAlerts: true, pages: [
-          (Icons.point_of_sale, 'Caisse', PosPage(session: session)),
-          (Icons.receipt_long, 'Commandes', OrdersPage(session: session)),
-          (Icons.people_outline, 'Clients', CustomersPage(session: session)),
+        return RoleShell(key: ValueKey('caisse-${session.establishmentId}'), session: session, title: 'Caisse', cashierAlerts: true, pages: [
+          (Icons.point_of_sale, 'Caisse', PosPage(key: const ValueKey('caisse'), session: session)),
+          (Icons.receipt_long, 'Commandes', OrdersPage(key: ValueKey('ord-${session.establishmentId}'), session: session)),
+          (Icons.people_outline, 'Clients', CustomersPage(key: ValueKey('cli-${session.establishmentId}'), session: session)),
         ]);
       case 'MAGASINIER':
-        return RoleShell(session: session, title: 'Stock', pages: [
-          (Icons.inventory_2_outlined, 'Stock', StockPage(session: session)),
-          (Icons.fact_check_outlined, 'Inventaire', InventoryPage(session: session)),
-          (Icons.report_gmailerrorred_outlined, 'Pertes', LossesPage(session: session)),
-          (Icons.local_shipping_outlined, 'Achats', PurchasesPage(session: session)),
+        return RoleShell(key: ValueKey('stock-${session.establishmentId}'), session: session, title: 'Stock', pages: [
+          (Icons.inventory_2_outlined, 'Stock', StockPage(key: ValueKey('stk-${session.establishmentId}'), session: session)),
+          (Icons.fact_check_outlined, 'Inventaire', InventoryPage(key: ValueKey('inv-${session.establishmentId}'), session: session)),
+          (Icons.report_gmailerrorred_outlined, 'Pertes', LossesPage(key: ValueKey('loss-${session.establishmentId}'), session: session)),
+          (Icons.local_shipping_outlined, 'Achats', PurchasesPage(key: ValueKey('ach-${session.establishmentId}'), session: session)),
         ]);
       case 'CUISINIER':
-        return RoleShell(session: session, title: 'Cuisine', kitchenAlerts: true, pages: [
-          (Icons.soup_kitchen_outlined, 'Cuisine', KitchenPage(session: session)),
+        return RoleShell(key: ValueKey('cuisine-${session.establishmentId}'), session: session, title: 'Cuisine', kitchenAlerts: true, pages: [
+          (Icons.soup_kitchen_outlined, 'Cuisine', KitchenPage(key: ValueKey('kit-${session.establishmentId}'), session: session)),
         ]);
       case 'LIVREUR':
-        return RoleShell(session: session, title: 'Livraison', driverAlerts: true, pages: [
-          (Icons.delivery_dining, 'Livraisons', DeliveryPage(session: session)),
+        return RoleShell(key: ValueKey('livreur-${session.establishmentId}'), session: session, title: 'Livraison', driverAlerts: true, pages: [
+          (Icons.delivery_dining, 'Livraisons', DeliveryPage(key: ValueKey('liv-${session.establishmentId}'), session: session)),
         ]);
       case 'CLIENT':
         return ClientShell(session: session);
@@ -385,6 +383,8 @@ class _AdminShellState extends State<AdminShell> {
   ];
 
   late int index;
+  String? _aliveEst;
+  final Map<int, Widget> _alive = {};
 
   @override
   void initState() {
@@ -398,31 +398,82 @@ class _AdminShellState extends State<AdminShell> {
     _writeNavMenu(_shell, _labels[i]);
   }
 
+  Widget _pageAt(int i) {
+    final s = widget.session;
+    final est = s.establishmentId;
+    switch (i) {
+      case 0:
+        return DashboardPage(key: ValueKey('dash-$est'), session: s);
+      case 1:
+        return ReportsPage(key: ValueKey('rep-$est'), session: s);
+      case 2:
+        return OrganizationPage(key: const ValueKey('org'), session: s);
+      case 3:
+        return UsersPage(key: const ValueKey('users'), session: s);
+      case 4:
+        return PermissionsPage(key: const ValueKey('perms'), session: s);
+      case 5:
+        return CatalogPage(key: ValueKey('cat-$est'), session: s);
+      case 6:
+        return CustomersPage(key: ValueKey('cli-$est'), session: s);
+      case 7:
+        return RecipesPage(key: ValueKey('rec-$est'), session: s);
+      case 8:
+        return StockPage(key: ValueKey('stk-$est'), session: s);
+      case 9:
+        return InventoryPage(key: ValueKey('inv-$est'), session: s);
+      case 10:
+        return LossesPage(key: ValueKey('loss-$est'), session: s);
+      case 11:
+        return PurchasesPage(key: ValueKey('ach-$est'), session: s);
+      case 12:
+        return PosPage(key: const ValueKey('caisse'), session: s);
+      case 13:
+        return OrdersPage(key: ValueKey('ord-$est'), session: s);
+      case 14:
+        return KitchenPage(key: ValueKey('kit-$est'), session: s);
+      case 15:
+        return DeliveryPage(key: ValueKey('liv-$est'), session: s);
+      case 16:
+        return InvoicesPage(key: ValueKey('fac-$est'), session: s);
+      case 17:
+        return UpdatesPage(key: const ValueKey('upd'), session: s);
+      case 18:
+        return ConfigPage(key: const ValueKey('cfg'), session: s);
+      case 19:
+        return SyncCenterPage(key: const ValueKey('sync'), session: s);
+      default:
+        return SystemHealthPage(key: const ValueKey('sys'), session: s);
+    }
+  }
+
+  Widget _keptPages() {
+    final est = widget.session.establishmentId;
+    if (_aliveEst != est) {
+      _alive
+        ..clear()
+        ..[index] = _pageAt(index);
+      _aliveEst = est;
+    } else {
+      _alive.putIfAbsent(index, () => _pageAt(index));
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        for (final entry in _alive.entries)
+          Offstage(
+            offstage: entry.key != index,
+            child: TickerMode(
+              enabled: entry.key == index,
+              child: entry.value,
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      DashboardPage(key: ValueKey('dash-${widget.session.establishmentId}'), session: widget.session),
-      ReportsPage(key: ValueKey('rep-${widget.session.establishmentId}'), session: widget.session),
-      OrganizationPage(key: const ValueKey('org'), session: widget.session),
-      UsersPage(key: const ValueKey('users'), session: widget.session),
-      PermissionsPage(key: const ValueKey('perms'), session: widget.session),
-      CatalogPage(key: ValueKey('cat-${widget.session.establishmentId}'), session: widget.session),
-      CustomersPage(key: ValueKey('cli-${widget.session.establishmentId}'), session: widget.session),
-      RecipesPage(key: ValueKey('rec-${widget.session.establishmentId}'), session: widget.session),
-      StockPage(key: ValueKey('stk-${widget.session.establishmentId}'), session: widget.session),
-      InventoryPage(key: ValueKey('inv-${widget.session.establishmentId}'), session: widget.session),
-      LossesPage(key: ValueKey('loss-${widget.session.establishmentId}'), session: widget.session),
-      PurchasesPage(key: ValueKey('ach-${widget.session.establishmentId}'), session: widget.session),
-      PosPage(key: const ValueKey('caisse'), session: widget.session),
-      OrdersPage(key: ValueKey('ord-${widget.session.establishmentId}'), session: widget.session),
-      KitchenPage(key: ValueKey('kit-${widget.session.establishmentId}'), session: widget.session),
-      DeliveryPage(key: ValueKey('liv-${widget.session.establishmentId}'), session: widget.session),
-      InvoicesPage(key: ValueKey('fac-${widget.session.establishmentId}'), session: widget.session),
-      UpdatesPage(key: const ValueKey('upd'), session: widget.session),
-      ConfigPage(key: const ValueKey('cfg'), session: widget.session),
-      SyncCenterPage(key: const ValueKey('sync'), session: widget.session),
-      SystemHealthPage(key: const ValueKey('sys'), session: widget.session),
-    ];
     const items = [
       (Icons.dashboard_outlined, 'Tableau de bord'),
       (Icons.assessment_outlined, 'Rapports'),
@@ -533,7 +584,7 @@ class _AdminShellState extends State<AdminShell> {
             )
           : null,
       body: compact
-          ? pages[index]
+          ? _keptPages()
           : Row(
         children: [
           SizedBox(
@@ -544,7 +595,7 @@ class _AdminShellState extends State<AdminShell> {
             ),
           ),
           const VerticalDivider(width: 1, color: NdjoColors.line),
-          Expanded(child: pages[index]),
+          Expanded(child: _keptPages()),
         ],
       ),
     ),
@@ -575,6 +626,7 @@ class RoleShell extends StatefulWidget {
 
 class _RoleShellState extends State<RoleShell> {
   late int index;
+  final Map<int, Widget> _alive = {};
 
   String get _shell => 'role-${widget.title}';
 
@@ -596,6 +648,24 @@ class _RoleShellState extends State<RoleShell> {
     return i >= 0 ? i : 0;
   }
 
+  Widget _keptPages() {
+    _alive.putIfAbsent(index, () => widget.pages[index].$3);
+    if (widget.pages.length == 1) return _alive[index]!;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        for (final entry in _alive.entries)
+          Offstage(
+            offstage: entry.key != index,
+            child: TickerMode(
+              enabled: entry.key == index,
+              child: entry.value,
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final compact = ndjoCompact(context);
@@ -615,11 +685,9 @@ class _RoleShellState extends State<RoleShell> {
         title: Text('${widget.title} — NDJO TACOS'),
         actions: [IconButton(onPressed: widget.session.logout, icon: const Icon(Icons.logout))],
       ),
-      body: widget.pages.length == 1
-          ? widget.pages.first.$3
-          : compact
-              ? widget.pages[index].$3
-              : Row(
+      body: compact || widget.pages.length == 1
+          ? _keptPages()
+          : Row(
               children: [
                 NavigationRail(
                   selectedIndex: index,
@@ -628,7 +696,7 @@ class _RoleShellState extends State<RoleShell> {
                   destinations: widget.pages.map((item) => NavigationRailDestination(icon: Icon(item.$1), label: Text(item.$2))).toList(),
                 ),
                 const VerticalDivider(width: 1, color: NdjoColors.line),
-                Expanded(child: widget.pages[index].$3),
+                Expanded(child: _keptPages()),
               ],
             ),
       bottomNavigationBar: compact && widget.pages.length > 1
