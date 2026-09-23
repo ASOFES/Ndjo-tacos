@@ -520,7 +520,7 @@ class _OrdersPageState extends State<OrdersPage> {
           return Card(
             child: ListTile(
               title: Text('${order['number']} · ${order['status']}'),
-              subtitle: Text('${order['type']} · ${order['customerName'] ?? order['user']?['name'] ?? ''} · ${orderPayLabel(order)}'),
+              subtitle: Text('${formatRecordWhen(order)} · ${order['type']} · ${order['customerName'] ?? order['user']?['name'] ?? ''} · ${orderPayLabel(order)}'),
               trailing: Text(fc((order['total'] as num?) ?? 0)),
               onTap: () => showTicketSheet(context, session: widget.session, order: order),
             ),
@@ -579,7 +579,7 @@ class _InvoicesPageState extends State<InvoicesPage> {
             child: ListTile(
               title: Text(invoice['number'].toString()),
               subtitle: Text(
-                '${order['customerName'] ?? order['customer']?['name'] ?? order['number'] ?? ''} · ${orderPayLabel(order)}',
+                withMovementWhen(invoice, '${order['customerName'] ?? order['customer']?['name'] ?? order['number'] ?? ''} · ${orderPayLabel(order)}'),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -904,6 +904,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
               padding: const EdgeInsets.all(16),
               children: [
                 Text('${order['number']} · ${order['status']}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                Text(formatRecordWhen(order), style: const TextStyle(color: NdjoColors.muted)),
                 Text('Client : ${order['customerName'] ?? '—'}'),
                 Text(order['address']?.toString() ?? ''),
                 Text('Livreur : ${order['driver']?['name'] ?? 'Non affecté'}'),
@@ -1059,6 +1060,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('${order['number']} · ${order['status']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(formatRecordWhen(order), style: const TextStyle(color: NdjoColors.muted, fontSize: 12)),
                   Text('Client : ${order['customerName'] ?? '—'} · ${order['address'] ?? ''}'),
                   Text('Livreur : ${order['driver']?['name'] ?? 'Non affecté'}'),
                   Text('Prise ${_fmt(order['pickedUpAt'])} · Départ ${_fmt(order['departedAt'])} · Arrivée ${_fmt(order['arrivedAt'])}'),

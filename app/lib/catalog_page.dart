@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'pages.dart';
 import 'session.dart';
 import 'theme.dart';
+import 'time_fmt.dart';
 
 const ndjoPackSizes = [1, 3, 6, 12, 20, 22, 24];
 
@@ -724,7 +725,7 @@ class _ProductPreview extends StatelessWidget {
                 dense: true,
                 title: Text(lot['number']?.toString() ?? ''),
                 subtitle: Text(
-                  'Entrée ${lot['entryDate']?.toString().split('T').first ?? '—'} · Péremption ${lot['expiryDate']?.toString().split('T').first ?? '—'}\n'
+                  'Entrée ${formatLocalDateTime(lot['entryDate'] ?? lot['createdAt'])} · Péremption ${lot['expiryDate']?.toString().split('T').first ?? '—'}\n'
                   'Achat lot ${fc(lot['priceBuy'] as num? ?? 0)} · Vente lot ${fc(lot['priceSell'] as num? ?? 0)}',
                 ),
                 isThreeLine: true,

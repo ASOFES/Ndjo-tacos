@@ -166,7 +166,7 @@ class _SyncCenterPageState extends State<SyncCenterPage> {
           return Card(
             child: ListTile(
               title: Text('${item['type']} · ${item['clientUuid']}'),
-              subtitle: Text('${item['status'] ?? 'EN_ATTENTE_SYNC'} · ${item['error'] ?? 'en file'}'),
+              subtitle: Text(withMovementWhen(item, '${item['status'] ?? 'EN_ATTENTE_SYNC'} · ${item['error'] ?? 'en file'}')),
             ),
           );
         }),
@@ -177,7 +177,7 @@ class _SyncCenterPageState extends State<SyncCenterPage> {
             return Card(
               child: ListTile(
                 title: Text('${item['type']} · ${item['status']}'),
-                subtitle: Text(item['error']?.toString() ?? item['clientUuid']?.toString() ?? ''),
+                subtitle: Text(withMovementWhen(item, item['error']?.toString() ?? item['clientUuid']?.toString() ?? '')),
               ),
             );
           }),

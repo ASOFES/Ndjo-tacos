@@ -5,6 +5,7 @@ import 'clear_stuck_data.dart';
 import 'export_file.dart';
 import 'session.dart';
 import 'theme.dart';
+import 'time_fmt.dart';
 
 bool ndjoPageVisible(BuildContext context) => TickerMode.of(context);
 
@@ -299,7 +300,7 @@ Widget cashierClientInbox({
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('${order['number']} · ${orderPayLabel(order)}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                Text('${order['type']} · ${order['customerName'] ?? order['user']?['name'] ?? ''}'),
+                Text('${formatRecordWhen(order)} · ${order['type']} · ${order['customerName'] ?? order['user']?['name'] ?? ''}'),
                 if (orderItemsLine(order).isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
@@ -359,7 +360,7 @@ Widget cashierReadyPickup({required List<dynamic> orders}) {
           child: ListTile(
             title: Text('${order['number']} · ${delivery ? 'Livraison' : 'À remettre'}'),
             subtitle: Text(
-              '${order['customerName'] ?? order['user']?['name'] ?? ''} · ${orderItemsLine(order)}',
+              withMovementWhen(order, '${order['customerName'] ?? order['user']?['name'] ?? ''} · ${orderItemsLine(order)}'),
             ),
             trailing: Text(delivery ? '→ Livraisons' : 'Caisse'),
           ),
@@ -686,7 +687,7 @@ class _DashboardPageState extends State<DashboardPage> {
               child: ListTile(
                 leading: const Icon(Icons.chat, color: NdjoColors.success),
                 title: Text(map['title']?.toString() ?? 'WhatsApp'),
-                subtitle: Text('${map['status'] ?? ''} · ${map['message']} · ${map['order']?['number'] ?? ''}${map['error'] != null ? '\n${map['error']}' : ''}'),
+                subtitle: Text('${map['status'] ?? ''} · ${formatRecordWhen(map)} · ${map['message']} · ${map['order']?['number'] ?? ''}${map['error'] != null ? '\n${map['error']}' : ''}'),
               ),
             );
           }),
@@ -698,7 +699,7 @@ class _DashboardPageState extends State<DashboardPage> {
           return Card(
             child: ListTile(
               title: Text(map['details']?.toString() ?? ''),
-              subtitle: Text('${map['user']?['name'] ?? 'Système'} · ${map['action']} · ${map['entity']}'),
+              subtitle: Text('${formatRecordWhen(map)} · ${map['user']?['name'] ?? 'Système'} · ${map['action']} · ${map['entity']}'),
             ),
           );
         }),

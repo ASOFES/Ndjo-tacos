@@ -309,15 +309,15 @@ class _ReportsPageState extends State<ReportsPage> {
               })),
             ),
           _section('Stock bas', (stock['low'] as List<dynamic>).map((item) => '${item['name']} · ${item['qty']} ${item['unit']} (seuil ${item['alert']})')),
-          _section('Pertes de la période', (stock['losses'] as List<dynamic>).map((item) => '${item['number']} · ${item['product']} · ${item['quantity']} ${item['unit']} · ${item['status']}')),
-          _section('Inventaires', (stock['inventories'] as List<dynamic>).map((item) => '${item['number']} · ${item['status']} · ${item['countedBy']}')),
+          _section('Pertes de la période', (stock['losses'] as List<dynamic>).map((item) => '${formatLocalDateTime(item['createdAt'] ?? item['occurredAt'])} · ${item['number']} · ${item['product']} · ${item['quantity']} ${item['unit']} · ${item['status']}')),
+          _section('Inventaires', (stock['inventories'] as List<dynamic>).map((item) => '${formatLocalDateTime(item['createdAt'] ?? item['countedAt'])} · ${item['number']} · ${item['status']} · ${item['countedBy']}')),
           _section(
             'Mouvements (dont transferts)',
             (stock['movements'] as List<dynamic>).take(30).map((item) {
               final type = item['type']?.toString() ?? '';
               final motif = item['motif']?.toString() ?? '';
               final tag = type == 'TRANSFERT' || motif.contains('transfert') ? ' · transfert' : '';
-              return '${item['number']} · $type$tag · ${item['product']} · lot ${item['lot'] ?? '—'} · ${item['quantity']}';
+              return '${formatLocalDateTime(item['createdAt'])} · ${item['number']} · $type$tag · ${item['product']} · lot ${item['lot'] ?? '—'} · ${item['quantity']}';
             }),
           ),
         ],

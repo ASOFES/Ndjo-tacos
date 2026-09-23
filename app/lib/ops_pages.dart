@@ -8,6 +8,7 @@ import 'pages.dart';
 import 'session.dart';
 import 'theme.dart';
 import 'ticket.dart';
+import 'time_fmt.dart';
 
 class OrganizationPage extends StatefulWidget {
   const OrganizationPage({super.key, required this.session});
@@ -892,6 +893,13 @@ class _StockPageState extends State<StockPage> {
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     Text('${map['source']?['name'] ?? ''} → ${map['dest']?['name'] ?? ''} · ${map['quantity']}'),
+                    Text(
+                      withMovementWhen(map, [
+                        if (map['shippedAt'] != null) 'expédié ${formatLocalDateTime(map['shippedAt'])}',
+                        if (map['receivedAt'] != null) 'reçu ${formatLocalDateTime(map['receivedAt'])}',
+                      ].join(' · ')),
+                      style: const TextStyle(color: NdjoColors.muted, fontSize: 12),
+                    ),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -956,12 +964,11 @@ class _StockPageState extends State<StockPage> {
           Text(query.trim().isEmpty ? 'Aucun lot.' : 'Aucun lot trouvé.', style: const TextStyle(color: NdjoColors.muted)),
         ...shownLots.map((item) {
           final map = Map<String, dynamic>.from(item as Map);
-          final entry = (map['entryDate'] ?? map['createdAt'])?.toString().split('T').first ?? '—';
           return Card(
             child: ListTile(
               title: Text('${map['number']} · ${map['product']?['name'] ?? ''}'),
               subtitle: Text(
-                'Entrée $entry · Achat ${fc(map['priceBuy'] as num? ?? 0)} · Péremption ${map['expiryDate']?.toString().split('T').first ?? '—'}',
+                'Entrée ${formatLocalDateTime(map['entryDate'] ?? map['createdAt'])} · Achat ${fc(map['priceBuy'] as num? ?? 0)} · Péremption ${map['expiryDate']?.toString().split('T').first ?? '—'}',
               ),
               trailing: Text('${map['qtyCurrent']} / ${map['qtyInitial']}'),
             ),
@@ -976,7 +983,7 @@ class _StockPageState extends State<StockPage> {
           return Card(
             child: ListTile(
               title: Text('${map['number']} · ${map['type']}'),
-              subtitle: Text('${map['product']?['name'] ?? ''} · ${map['motif'] ?? ''} · ${map['user']?['name'] ?? ''}'),
+              subtitle: Text(withMovementWhen(map, '${map['product']?['name'] ?? ''} · ${map['motif'] ?? ''} · ${map['user']?['name'] ?? ''}')),
               trailing: Text('${map['quantity']}'),
             ),
           );
@@ -1637,7 +1644,7 @@ class _PosPageState extends State<PosPage> {
                   child: ListTile(
                     title: Text('${map['number']} · ${map['status']}'),
                     subtitle: Text([
-                      '${map['type']} · ${map['user'] is Map ? map['user']['name'] ?? '' : ''}',
+                      '${formatRecordWhen(map)} · ${map['type']} · ${map['user'] is Map ? map['user']['name'] ?? '' : ''}',
                       if ((map['error']?.toString() ?? '').trim().isNotEmpty) map['error'].toString(),
                     ].where((line) => line.trim().isNotEmpty).join('\n')),
                     trailing: Text(fc(_asPosNum(map['total']))),
@@ -1867,6 +1874,7 @@ class _KitchenPageState extends State<KitchenPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(order['number'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(formatRecordWhen(order), style: const TextStyle(color: NdjoColors.muted, fontSize: 12)),
               const SizedBox(height: 6),
               if (foods.isEmpty)
                 Text(items.map((line) => '${line['quantity']} × ${line['name']}').join('\n'))

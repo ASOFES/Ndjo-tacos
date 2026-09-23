@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'pages.dart';
 import 'session.dart';
 import 'theme.dart';
+import 'time_fmt.dart';
 
 class PurchasesPage extends StatefulWidget {
   const PurchasesPage({super.key, required this.session});
@@ -431,8 +432,8 @@ class _PurchasesPageState extends State<PurchasesPage> {
             child: ListTile(
               title: Text(purchase['number']?.toString() ?? '', overflow: TextOverflow.ellipsis),
               subtitle: Text(
-                '${purchase['supplier']?['name'] ?? ''} · ${purchase['status']}\n${fc(purchase['total'] as num? ?? 0)}',
-                maxLines: 2,
+                withMovementWhen(purchase, '${purchase['supplier']?['name'] ?? ''} · ${purchase['status']}\n${fc(purchase['total'] as num? ?? 0)}'),
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
               isThreeLine: true,
