@@ -318,13 +318,13 @@ class _InventoryPageState extends State<InventoryPage> {
             child: ListTile(
               title: Text(session['number']?.toString() ?? '', overflow: TextOverflow.ellipsis),
               subtitle: Text(
-                withMovementWhen(session, '${session['location']} · ${session['status']}'
-                '${session['totals'] != null ? '\n${session['totals']?['counted'] ?? 0}/${session['totals']?['lines'] ?? 0} lignes comptées' : ''}'),
+                '${session['location']} · ${session['status']}'
+                '${session['totals'] != null ? '\n${session['totals']?['counted'] ?? 0}/${session['totals']?['lines'] ?? 0} lignes comptées' : ''}',
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
               ),
-              isThreeLine: session['totals'] != null,
-              trailing: const Icon(Icons.chevron_right),
+              isThreeLine: true,
+              trailing: NdjoWhenText(session, align: TextAlign.right),
               onTap: () => _open(session),
             ),
           );
@@ -611,9 +611,10 @@ class _LossesPageState extends State<LossesPage> {
             child: ListTile(
               title: Text('${loss['product']?['name']} · ${loss['lot']?['number']} · ${loss['quantity']} ${loss['unit']}'),
               subtitle: Text(
-                withMovementWhen(loss, '${motifs[loss['motif']] ?? loss['motif']}\n'
+                '${motifs[loss['motif']] ?? loss['motif']}\n'
                 'Déclaré par ${loss['declaredBy']?['name'] ?? '—'}'
-                '${loss['validatedBy'] != null ? ' · Validé par ${loss['validatedBy']['name']}' : ''}'),
+                '${loss['validatedBy'] != null ? ' · Validé par ${loss['validatedBy']['name']}' : ''}\n'
+                '${formatRecordWhen(loss)}',
               ),
               isThreeLine: true,
               trailing: pending

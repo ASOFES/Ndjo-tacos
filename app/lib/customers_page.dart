@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'pages.dart';
 import 'session.dart';
 import 'theme.dart';
+import 'time_fmt.dart';
 
 class CustomersPage extends StatefulWidget {
   const CustomersPage({super.key, required this.session});
@@ -326,7 +327,8 @@ class _CustomersPageState extends State<CustomersPage> {
                   color: customer['id'] == openId ? const Color(0xFF3A2A1C) : null,
                   child: ListTile(
                     title: Text(customer['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: Text('${customer['phone']} · ${customer['category'] ?? 'STANDARD'} · ${addresses.length} adresse(s)'),
+                    subtitle: Text('${customer['phone']} · ${customer['category'] ?? 'STANDARD'} · ${addresses.length} adresse(s)\n${formatRecordWhen(customer)}'),
+                    isThreeLine: true,
                     trailing: Text(customer['status']?.toString() ?? ''),
                     onTap: () => setState(() => openId = customer['id'].toString()),
                     onLongPress: () => _editCustomer(customer),
@@ -368,6 +370,7 @@ class _CustomersPageState extends State<CustomersPage> {
               DataColumn(label: Text('Code')),
               DataColumn(label: Text('Nom')),
               DataColumn(label: Text('Frais')),
+              DataColumn(label: Text('Date')),
               DataColumn(label: Text('Statut')),
               DataColumn(label: Text('')),
             ],
@@ -377,6 +380,7 @@ class _CustomersPageState extends State<CustomersPage> {
                 DataCell(Text(zone['code']?.toString() ?? '')),
                 DataCell(Text(zone['name']?.toString() ?? '')),
                 DataCell(Text(fc(zone['fee'] as num? ?? 0), style: const TextStyle(color: NdjoColors.accent, fontWeight: FontWeight.bold))),
+                DataCell(NdjoWhenText(zone)),
                 DataCell(Text(zone['status']?.toString() ?? '')),
                 DataCell(IconButton(onPressed: () => _editZone(zone), icon: const Icon(Icons.edit))),
               ]);
@@ -410,6 +414,7 @@ class _CustomerSheet extends StatelessWidget {
         Text('${customer['phone']} · ${customer['email'] ?? 'sans e-mail'}', style: const TextStyle(color: NdjoColors.muted)),
         const SizedBox(height: 8),
         Text('Statut : ${customer['status']}', style: const TextStyle(fontWeight: FontWeight.w600)),
+        NdjoWhenText(customer),
         if ((customer['notes']?.toString() ?? '').isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(customer['notes'].toString()),
@@ -435,7 +440,7 @@ class _CustomerSheet extends StatelessWidget {
                       ? 'Zone non définie — les frais ne pourront pas être calculés'
                       : '${zone['name']} · ${fc(zone['fee'] as num)}',
                 ),
-                trailing: address['isDefault'] == true ? const Text('Défaut') : null,
+                trailing: address['isDefault'] == true ? const Text('Défaut') : NdjoWhenText(address),
                 onTap: () => onEditAddress(address),
               ),
             );

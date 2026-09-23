@@ -300,7 +300,8 @@ Widget cashierClientInbox({
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('${order['number']} · ${orderPayLabel(order)}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                Text('${formatRecordWhen(order)} · ${order['type']} · ${order['customerName'] ?? order['user']?['name'] ?? ''}'),
+                NdjoWhenText(order),
+                Text('${order['type']} · ${order['customerName'] ?? order['user']?['name'] ?? ''}'),
                 if (orderItemsLine(order).isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
@@ -360,8 +361,9 @@ Widget cashierReadyPickup({required List<dynamic> orders}) {
           child: ListTile(
             title: Text('${order['number']} · ${delivery ? 'Livraison' : 'À remettre'}'),
             subtitle: Text(
-              withMovementWhen(order, '${order['customerName'] ?? order['user']?['name'] ?? ''} · ${orderItemsLine(order)}'),
+              '${order['customerName'] ?? order['user']?['name'] ?? ''} · ${orderItemsLine(order)}\n${formatRecordWhen(order)}',
             ),
+            isThreeLine: true,
             trailing: Text(delivery ? '→ Livraisons' : 'Caisse'),
           ),
         );
@@ -687,7 +689,9 @@ class _DashboardPageState extends State<DashboardPage> {
               child: ListTile(
                 leading: const Icon(Icons.chat, color: NdjoColors.success),
                 title: Text(map['title']?.toString() ?? 'WhatsApp'),
-                subtitle: Text('${map['status'] ?? ''} · ${formatRecordWhen(map)} · ${map['message']} · ${map['order']?['number'] ?? ''}${map['error'] != null ? '\n${map['error']}' : ''}'),
+                subtitle: Text('${map['status'] ?? ''}\n${map['message']} · ${map['order']?['number'] ?? ''}${map['error'] != null ? '\n${map['error']}' : ''}'),
+                isThreeLine: true,
+                trailing: NdjoWhenText(map, align: TextAlign.right),
               ),
             );
           }),
@@ -699,7 +703,8 @@ class _DashboardPageState extends State<DashboardPage> {
           return Card(
             child: ListTile(
               title: Text(map['details']?.toString() ?? ''),
-              subtitle: Text('${formatRecordWhen(map)} · ${map['user']?['name'] ?? 'Système'} · ${map['action']} · ${map['entity']}'),
+              subtitle: Text('${map['user']?['name'] ?? 'Système'} · ${map['action']} · ${map['entity']}'),
+              trailing: NdjoWhenText(map, align: TextAlign.right),
             ),
           );
         }),
@@ -832,7 +837,8 @@ class _UpdatesPageState extends State<UpdatesPage> {
             child: ListTile(
               leading: const Icon(Icons.phone_android, color: NdjoColors.primary),
               title: Text('v${map['version']}  ·  build ${map['buildNumber']}'),
-              subtitle: Text('${map['status']} · ${map['notes'] ?? ''}'),
+              subtitle: Text('${map['status']} · ${map['notes'] ?? ''}\n${formatRecordWhen(map)}'),
+              isThreeLine: true,
               trailing: map['forceUpdate'] == true
                   ? const Chip(label: Text('FORCÉE'), backgroundColor: NdjoColors.danger)
                   : Chip(label: Text('${map['platform']}')),
@@ -846,7 +852,7 @@ class _UpdatesPageState extends State<UpdatesPage> {
           return Card(
             child: ListTile(
               title: Text('${map['code']} · ${map['status']}'),
-              subtitle: Text('par ${map['author']?['name'] ?? ''}'),
+              subtitle: Text('par ${map['author']?['name'] ?? ''} · ${formatRecordWhen(map)}'),
               trailing: map['status'] == 'PUBLIEE'
                   ? TextButton(onPressed: () => _rollback(map['id'].toString()), child: const Text('Rollback'))
                   : null,
@@ -861,7 +867,8 @@ class _UpdatesPageState extends State<UpdatesPage> {
           return Card(
             child: ListTile(
               title: Text(map['deviceName'].toString()),
-              subtitle: Text('${map['role']} · build ${map['appBuild']}'),
+              subtitle: Text('${map['role']} · build ${map['appBuild']}\n${formatRecordWhen(map)}'),
+              isThreeLine: true,
               trailing: Text(
                 pending ? 'En attente de MAJ' : 'À jour',
                 style: TextStyle(color: pending ? NdjoColors.accent : NdjoColors.success),

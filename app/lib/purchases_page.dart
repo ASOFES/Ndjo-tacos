@@ -404,7 +404,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
           return Card(
             child: ListTile(
               title: Text(supplier['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text('${supplier['phone'] ?? '—'} · ${supplier['address'] ?? ''}\n${supplier['email'] ?? ''}'),
+              subtitle: Text('${supplier['phone'] ?? '—'} · ${supplier['address'] ?? ''}\n${supplier['email'] ?? ''} · ${formatRecordWhen(supplier)}'),
               isThreeLine: true,
               trailing: Text(supplier['status']?.toString() ?? ''),
               onTap: () => _editSupplier(supplier),
@@ -432,12 +432,12 @@ class _PurchasesPageState extends State<PurchasesPage> {
             child: ListTile(
               title: Text(purchase['number']?.toString() ?? '', overflow: TextOverflow.ellipsis),
               subtitle: Text(
-                withMovementWhen(purchase, '${purchase['supplier']?['name'] ?? ''} · ${purchase['status']}\n${fc(purchase['total'] as num? ?? 0)}'),
+                '${purchase['supplier']?['name'] ?? ''} · ${purchase['status']}\n${fc(purchase['total'] as num? ?? 0)}',
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
               isThreeLine: true,
-              trailing: const Icon(Icons.chevron_right),
+              trailing: NdjoWhenText(purchase, align: TextAlign.right),
               onTap: () => setState(() => open = Map<String, dynamic>.from(purchase)),
             ),
           );

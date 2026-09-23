@@ -142,7 +142,8 @@ class _OrganizationPageState extends State<OrganizationPage> {
             color: selected ? const Color(0xFF3A2A1C) : null,
             child: ListTile(
               title: Text(map['name'].toString()),
-              subtitle: Text('${map['code']} · ${map['type']} · ${map['status']}'),
+              subtitle: Text('${map['code']} · ${map['type']} · ${map['status']}\n${formatRecordWhen(map)}'),
+              isThreeLine: true,
               onTap: () {
                 setState(() => selectedId = map['id'].toString());
                 _load();
@@ -163,7 +164,7 @@ class _OrganizationPageState extends State<OrganizationPage> {
           return Card(
             child: ListTile(
               title: Text(map['name'].toString()),
-              subtitle: Text('${map['_count']?['users'] ?? 0} utilisateur(s)'),
+              subtitle: Text('${map['_count']?['users'] ?? 0} utilisateur(s) · ${formatRecordWhen(map)}'),
               trailing: Text(map['status'].toString(), style: const TextStyle(color: NdjoColors.success)),
             ),
           );
@@ -332,7 +333,8 @@ class _UsersPageState extends State<UsersPage> {
                     : null,
               ),
               title: Text(map['name'].toString()),
-              subtitle: Text('${map['username']} · ${map['role']} · ${map['department']?['name'] ?? 'Sans département'}'),
+              subtitle: Text('${map['username']} · ${map['role']} · ${map['department']?['name'] ?? 'Sans département'}\n${formatRecordWhen(map)}'),
+              isThreeLine: true,
               trailing: IconButton(onPressed: () => _edit(map), icon: const Icon(Icons.edit)),
             ),
           );
@@ -945,6 +947,7 @@ class _StockPageState extends State<StockPage> {
               title: Text(map['name'].toString()),
               subtitle: Text(
                 [
+                  formatRecordWhen(map),
                   map['category']?['name'] ?? '',
                   '$lotCount lot${lotCount == 1 ? '' : 's'}',
                   if (prices.isNotEmpty) prices,
@@ -983,8 +986,8 @@ class _StockPageState extends State<StockPage> {
           return Card(
             child: ListTile(
               title: Text('${map['number']} · ${map['type']}'),
-              subtitle: Text(withMovementWhen(map, '${map['product']?['name'] ?? ''} · ${map['motif'] ?? ''} · ${map['user']?['name'] ?? ''}')),
-              trailing: Text('${map['quantity']}'),
+              subtitle: Text('${map['quantity']} · ${map['product']?['name'] ?? ''} · ${map['motif'] ?? ''} · ${map['user']?['name'] ?? ''}'),
+              trailing: NdjoWhenText(map, align: TextAlign.right),
             ),
           );
         }),
@@ -1644,10 +1647,10 @@ class _PosPageState extends State<PosPage> {
                   child: ListTile(
                     title: Text('${map['number']} · ${map['status']}'),
                     subtitle: Text([
-                      '${formatRecordWhen(map)} · ${map['type']} · ${map['user'] is Map ? map['user']['name'] ?? '' : ''}',
+                      '${fc(_asPosNum(map['total']))} · ${map['type']} · ${map['user'] is Map ? map['user']['name'] ?? '' : ''}',
                       if ((map['error']?.toString() ?? '').trim().isNotEmpty) map['error'].toString(),
                     ].where((line) => line.trim().isNotEmpty).join('\n')),
-                    trailing: Text(fc(_asPosNum(map['total']))),
+                    trailing: NdjoWhenText(map, align: TextAlign.right),
                     onTap: () => showTicketSheet(context, session: widget.session, order: map),
                   ),
                 );
@@ -1874,7 +1877,7 @@ class _KitchenPageState extends State<KitchenPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(order['number'].toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              Text(formatRecordWhen(order), style: const TextStyle(color: NdjoColors.muted, fontSize: 12)),
+              NdjoWhenText(order),
               const SizedBox(height: 6),
               if (foods.isEmpty)
                 Text(items.map((line) => '${line['quantity']} × ${line['name']}').join('\n'))

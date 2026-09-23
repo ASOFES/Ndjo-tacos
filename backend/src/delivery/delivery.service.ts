@@ -513,6 +513,7 @@ export class DeliveryService {
       otpSent: Boolean(order.otpSentAt),
       otpSentAt: order.otpSentAt,
       otpVerifiedAt: order.otpVerifiedAt,
+      createdAt: order.createdAt,
       proof: {
         photoUrl: order.proofPhotoUrl,
         signature: order.proofSignature,

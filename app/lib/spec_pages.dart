@@ -351,6 +351,8 @@ class _RecipesPageState extends State<RecipesPage> {
                   Row(
                     children: [
                       Expanded(child: Text(recipe['product']?['name']?.toString() ?? 'Recette', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+                      NdjoWhenText(recipe),
+                      const SizedBox(width: 12),
                       Text(fc(recipe['product']?['priceSell'] ?? 0), style: const TextStyle(color: NdjoColors.accent, fontWeight: FontWeight.bold)),
                       IconButton(onPressed: () => _edit(recipe), icon: const Icon(Icons.edit), tooltip: 'Modifier'),
                       IconButton(
@@ -520,8 +522,8 @@ class _OrdersPageState extends State<OrdersPage> {
           return Card(
             child: ListTile(
               title: Text('${order['number']} · ${order['status']}'),
-              subtitle: Text('${formatRecordWhen(order)} · ${order['type']} · ${order['customerName'] ?? order['user']?['name'] ?? ''} · ${orderPayLabel(order)}'),
-              trailing: Text(fc((order['total'] as num?) ?? 0)),
+              subtitle: Text('${order['type']} · ${order['customerName'] ?? order['user']?['name'] ?? ''} · ${orderPayLabel(order)} · ${fc((order['total'] as num?) ?? 0)}'),
+              trailing: NdjoWhenText(order, align: TextAlign.right),
               onTap: () => showTicketSheet(context, session: widget.session, order: order),
             ),
           );
@@ -578,12 +580,8 @@ class _InvoicesPageState extends State<InvoicesPage> {
           return Card(
             child: ListTile(
               title: Text(invoice['number'].toString()),
-              subtitle: Text(
-                withMovementWhen(invoice, '${order['customerName'] ?? order['customer']?['name'] ?? order['number'] ?? ''} · ${orderPayLabel(order)}'),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: Text(fc(invoice['total'] as num)),
+              subtitle: Text('${order['customerName'] ?? order['customer']?['name'] ?? order['number'] ?? ''} · ${orderPayLabel(order)} · ${fc(invoice['total'] as num)}'),
+              trailing: NdjoWhenText(invoice, align: TextAlign.right),
               onTap: () => showTicketSheet(context, session: widget.session, order: order),
             ),
           );
@@ -904,7 +902,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
               padding: const EdgeInsets.all(16),
               children: [
                 Text('${order['number']} · ${order['status']}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                Text(formatRecordWhen(order), style: const TextStyle(color: NdjoColors.muted)),
+                NdjoWhenText(order),
                 Text('Client : ${order['customerName'] ?? '—'}'),
                 Text(order['address']?.toString() ?? ''),
                 Text('Livreur : ${order['driver']?['name'] ?? 'Non affecté'}'),
@@ -1040,7 +1038,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
                 child: driver['photoUrl'] == null ? Text(driver['name'].toString().substring(0, 1)) : null,
               ),
               title: Text(driver['name'].toString()),
-              subtitle: Text('${driver['phone'] ?? ''} · profil et historique'),
+              subtitle: Text('${driver['phone'] ?? ''} · profil et historique\n${formatRecordWhen(driver)}'),
+              isThreeLine: true,
               trailing: Text(_driverStatus(driver['availability']?.toString())),
               onTap: () => _openHistory(driver['id'].toString()),
             ),
@@ -1060,7 +1059,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('${order['number']} · ${order['status']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text(formatRecordWhen(order), style: const TextStyle(color: NdjoColors.muted, fontSize: 12)),
+                  NdjoWhenText(order),
                   Text('Client : ${order['customerName'] ?? '—'} · ${order['address'] ?? ''}'),
                   Text('Livreur : ${order['driver']?['name'] ?? 'Non affecté'}'),
                   Text('Prise ${_fmt(order['pickedUpAt'])} · Départ ${_fmt(order['departedAt'])} · Arrivée ${_fmt(order['arrivedAt'])}'),

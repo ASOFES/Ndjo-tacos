@@ -494,6 +494,7 @@ class _CatalogPageState extends State<CatalogPage> {
                     columns: const [
                       DataColumn(label: Text('Code')),
                       DataColumn(label: Text('Nom')),
+                      DataColumn(label: Text('Date')),
                       DataColumn(label: Text('Catégorie')),
                       DataColumn(label: Text('Sous-cat.')),
                       DataColumn(label: Text('Format')),
@@ -521,6 +522,7 @@ class _CatalogPageState extends State<CatalogPage> {
                         cells: [
                           DataCell(Text(product['code']?.toString() ?? '')),
                           DataCell(Text(product['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w700))),
+                          DataCell(NdjoWhenText(product)),
                           DataCell(Text(product['category']?['name']?.toString() ?? '')),
                           DataCell(Text(product['subcategory']?.toString() ?? '—')),
                           DataCell(Text(product['format']?.toString() ?? '—')),
@@ -561,7 +563,7 @@ class _CatalogPageState extends State<CatalogPage> {
                   return Card(
                     child: ListTile(
                       title: Text('${product['code'] ?? ''} · ${product['name']}'),
-                      subtitle: Text('${product['category']?['name'] ?? ''} · ${product['format'] ?? product['unit'] ?? ''}'),
+                      subtitle: Text('${formatRecordWhen(product)} · ${product['category']?['name'] ?? ''} · ${product['format'] ?? product['unit'] ?? ''}'),
                       trailing: Text(fc(product['priceSell'] as num? ?? 0)),
                     ),
                   );
@@ -645,6 +647,7 @@ class _ProductPreview extends StatelessWidget {
         _kv('Code produit', product['code']?.toString() ?? '—'),
         _kv('Description', description.isEmpty ? '—' : description),
         _kv('Statut', product['status']?.toString() ?? '—'),
+        _kv('Date', formatRecordWhen(product)),
         const SizedBox(height: 14),
         _heading('Classification'),
         _kv('Catégorie', product['category']?['name']?.toString() ?? '—'),
