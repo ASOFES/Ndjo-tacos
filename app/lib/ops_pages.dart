@@ -1444,6 +1444,7 @@ class _PosPageState extends State<PosPage> {
                 onSend: _sendToKitchen,
                 onTicket: (order) => showTicketSheet(context, session: widget.session, order: order),
               ),
+              cashierReadyPickup(orders: orders),
               if (pendingOps > 0)
                 Card(
                   child: ListTile(
@@ -1794,7 +1795,7 @@ class _KitchenPageState extends State<KitchenPage> {
         ...list.where((item) {
           final map = item as Map;
           final status = map['status']?.toString();
-          if (status == 'EN_CAISSE') return false;
+          if (status == 'EN_CAISSE' || status == 'PRETE') return false;
           return !pendingIds.contains(map['clientUuid']?.toString()) &&
               !pendingIds.contains(map['id']?.toString());
         }),
@@ -1828,6 +1829,11 @@ class _KitchenPageState extends State<KitchenPage> {
             const SnackBar(content: Text('Statut cuisine enregistré hors ligne. Le stock sortira à la synchro.')),
           );
         }
+      }
+      if (status == 'PRETE' && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Prête : sur place / emporter → Caisse. Livraison → Livraisons (Affecter).')),
+        );
       }
       await _load();
     } catch (e) {
@@ -1917,7 +1923,10 @@ class _KitchenPageState extends State<KitchenPage> {
             IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
           ],
         ),
-        const Text('Ticket cuisine = aliments. COMMENCER sort le stock. TERMINÉ envoie à la caisse ; le ticket reste visible ici jusqu’à encaissement / livraison.', style: TextStyle(color: NdjoColors.muted)),
+        const Text(
+          'Cuisine = plats uniquement (pas les boissons). COMMENCER sort le stock. TERMINÉ envoie la commande à la caisse (remettre) ou aux livraisons (affecter un livreur).',
+          style: TextStyle(color: NdjoColors.muted),
+        ),
         const SizedBox(height: 16),
         ndjoCompact(context)
             ? Column(
@@ -1926,8 +1935,6 @@ class _KitchenPageState extends State<KitchenPage> {
                   lane('NOUVELLE', '🔴 NOUVELLES', action: 'COMMENCER', next: 'EN_PREPARATION'),
                   const SizedBox(height: 16),
                   lane('EN_PREPARATION', '🟡 EN PRÉPARATION', action: 'TERMINÉ', next: 'PRETE'),
-                  const SizedBox(height: 16),
-                  lane('PRETE', '🟢 PRÊTES'),
                 ],
               )
             : Row(
@@ -1936,8 +1943,6 @@ class _KitchenPageState extends State<KitchenPage> {
             Expanded(child: lane('NOUVELLE', '🔴 NOUVELLES', action: 'COMMENCER', next: 'EN_PREPARATION')),
             const SizedBox(width: 16),
             Expanded(child: lane('EN_PREPARATION', '🟡 EN PRÉPARATION', action: 'TERMINÉ', next: 'PRETE')),
-            const SizedBox(width: 16),
-            Expanded(child: lane('PRETE', '🟢 PRÊTES')),
           ],
         ),
       ],

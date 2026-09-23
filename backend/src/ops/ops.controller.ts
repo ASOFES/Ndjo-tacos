@@ -101,7 +101,7 @@ export class OpsController {
   }
 
   @Post('heartbeat')
-  heartbeat(
+  async heartbeat(
     @Body()
     body: {
       establishmentId: string;
@@ -112,12 +112,13 @@ export class OpsController {
       pendingOps?: number;
       lastError?: string;
     },
+    @Req() req: { user?: { sub: string; role?: string } },
   ) {
     const id = createHash('sha1')
       .update(`${body.establishmentId}:${body.deviceName}`)
       .digest('hex')
       .slice(0, 24);
-    return this.prisma.deviceDeployment.upsert({
+    const device = await this.prisma.deviceDeployment.upsert({
       where: { id },
       update: {
         appBuild: body.appBuild,
@@ -141,5 +142,13 @@ export class OpsController {
         status: (body.pendingOps ?? 0) > 0 ? 'EN_ATTENTE' : 'A_JOUR',
       },
     });
+    const role = req.user?.role ?? body.role;
+    if (role === 'LIVREUR' && req.user?.sub) {
+      await this.prisma.user.updateMany({
+        where: { id: req.user.sub, availability: { not: 'EN_LIVRAISON' } },
+        data: { availability: 'DISPONIBLE' },
+      });
+    }
+    return device;
   }
 }

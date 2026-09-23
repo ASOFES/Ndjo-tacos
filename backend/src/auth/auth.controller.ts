@@ -34,6 +34,13 @@ export class AuthController {
     if (user.status !== 'ACTIF') {
       throw new UnauthorizedException('Compte désactivé');
     }
+    if (user.role === 'LIVREUR' && user.availability !== 'EN_LIVRAISON') {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { availability: 'DISPONIBLE' },
+      });
+      user.availability = 'DISPONIBLE';
+    }
     return this.issueSession(user);
   }
 
@@ -55,16 +62,32 @@ export class AuthController {
     if (stored.user.status !== 'ACTIF') {
       throw new UnauthorizedException('Compte désactivé');
     }
+    if (stored.user.role === 'LIVREUR' && stored.user.availability !== 'EN_LIVRAISON') {
+      await this.prisma.user.update({
+        where: { id: stored.user.id },
+        data: { availability: 'DISPONIBLE' },
+      });
+      stored.user.availability = 'DISPONIBLE';
+    }
     return this.issueSession(stored.user);
   }
 
   @Post('logout')
   @UseGuards(JwtGuard)
-  async logout(@Body() body: { refreshToken?: string }) {
+  async logout(
+    @Body() body: { refreshToken?: string },
+    @Req() req: { user: { sub: string; role?: string } },
+  ) {
     if (body.refreshToken) {
       await this.prisma.refreshToken.updateMany({
         where: { tokenHash: hashToken(body.refreshToken) },
         data: { revokedAt: new Date() },
+      });
+    }
+    if (req.user?.role === 'LIVREUR') {
+      await this.prisma.user.updateMany({
+        where: { id: req.user.sub, availability: { not: 'EN_LIVRAISON' } },
+        data: { availability: 'HORS_LIGNE' },
       });
     }
     return { ok: true };

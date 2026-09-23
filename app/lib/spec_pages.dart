@@ -512,6 +512,7 @@ class _OrdersPageState extends State<OrdersPage> {
           onSend: _sendToKitchen,
           onTicket: (order) => showTicketSheet(context, session: widget.session, order: order),
         ),
+        cashierReadyPickup(orders: orders),
         ...rest.map((item) {
           final order = Map<String, dynamic>.from(item as Map);
           return Card(
@@ -631,12 +632,24 @@ class _DeliveryPageState extends State<DeliveryPage> {
     drivers = widget.session.peekList('drivers-$id');
     try {
       final loadedDeliveries = await widget.session.cachedList('/delivery?establishmentId=$id', 'delivery-$id');
-      final loadedDrivers = await widget.session.cachedList('/delivery/drivers?establishmentId=$id', 'drivers-$id');
+      List<dynamic> loadedDrivers = [];
+      try {
+        loadedDrivers = await widget.session.api.getList('/delivery/drivers?establishmentId=$id');
+        await widget.session.sync?.store.cacheList('drivers-$id', loadedDrivers);
+      } catch (_) {
+        loadedDrivers = await widget.session.cachedList('/delivery/drivers?establishmentId=$id', 'drivers-$id');
+      }
       if (!mounted) return;
+      final me = widget.session.user?['id']?.toString();
+      final mine = loadedDrivers.whereType<Map>().cast<Map>().where((row) => row['id']?.toString() == me);
+      final liveAvailability = mine.isEmpty ? null : mine.first['availability']?.toString();
+      if (liveAvailability != null) {
+        widget.session.user?['availability'] = liveAvailability;
+      }
       setState(() {
         deliveries = loadedDeliveries.isNotEmpty ? loadedDeliveries : deliveries;
         drivers = loadedDrivers.isNotEmpty ? loadedDrivers : drivers;
-        availability = widget.session.user?['availability']?.toString() ?? 'HORS_LIGNE';
+        availability = liveAvailability ?? widget.session.user?['availability']?.toString() ?? 'HORS_LIGNE';
         error = null;
       });
     } catch (e) {
@@ -933,10 +946,15 @@ class _DeliveryPageState extends State<DeliveryPage> {
         if (isDriver) ...[
           const SizedBox(height: 8),
           Text('Statut : ${_driverStatus(availability)}'),
+          const Text(
+            'Connecté = disponible pour une course. Se déconnecter vous passe hors ligne.',
+            style: TextStyle(color: NdjoColors.muted, fontSize: 12),
+          ),
           TextButton(onPressed: _toggle, child: Text(availability == 'DISPONIBLE' ? 'Passer hors ligne' : 'Se rendre disponible')),
         ],
         const SizedBox(height: 12),
         const Text('Livreurs', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+        const Text('Disponible = application ouverte. Hors ligne = pas connecté.', style: TextStyle(color: NdjoColors.muted, fontSize: 12)),
         ...drivers.map((item) {
           final driver = item as Map<String, dynamic>;
           return Card(
@@ -1069,9 +1087,10 @@ List<Map<String, dynamic>> _deliveryMovements(Map<String, dynamic> order) {
 }
 
 String _driverStatus(String? value) {
-  if (value == 'DISPONIBLE') return '🟢 Disponible';
-  if (value == 'EN_LIVRAISON') return '🟡 En course';
-  return '⚫ Hors ligne';
+  if (value == 'DISPONIBLE') return 'Disponible';
+  if (value == 'EN_LIVRAISON') return 'En course';
+  if (value == 'HORS_LIGNE') return 'Hors ligne';
+  return value == null || value.isEmpty ? 'Hors ligne' : value;
 }
 
 String _fmt(dynamic value) => formatLocalDateTime(value);

@@ -323,6 +323,38 @@ Widget cashierClientInbox({
   );
 }
 
+Widget cashierReadyPickup({required List<dynamic> orders}) {
+  final ready = [
+    for (final item in orders)
+      if (item is Map && item['status']?.toString() == 'PRETE') Map<String, dynamic>.from(item),
+  ];
+  if (ready.isEmpty) return const SizedBox.shrink();
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text('Prêtes — après cuisine', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+      const Text(
+        'Sur place / à emporter : remettre au client ici. Livraison : onglet Livraisons → Affecter un livreur.',
+        style: TextStyle(color: NdjoColors.muted, fontSize: 12),
+      ),
+      const SizedBox(height: 8),
+      ...ready.map((order) {
+        final delivery = order['type']?.toString() == 'LIVRAISON';
+        return Card(
+          child: ListTile(
+            title: Text('${order['number']} · ${delivery ? 'Livraison' : 'À remettre'}'),
+            subtitle: Text(
+              '${order['customerName'] ?? order['user']?['name'] ?? ''} · ${orderItemsLine(order)}',
+            ),
+            trailing: Text(delivery ? '→ Livraisons' : 'Caisse'),
+          ),
+        );
+      }),
+      const SizedBox(height: 16),
+    ],
+  );
+}
+
 num _menuNum(dynamic value) {
   if (value is num) return value;
   return num.tryParse(value?.toString() ?? '') ?? 0;

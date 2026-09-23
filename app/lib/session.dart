@@ -21,6 +21,7 @@ class Session extends ChangeNotifier {
   String? selectedEstablishmentId;
   bool ready = false;
   bool clientMode = false;
+  Timer? _hb;
 
   String? get role => user?['role']?.toString();
 
@@ -51,6 +52,7 @@ class Session extends ChangeNotifier {
     ready = true;
     notifyListeners();
     unawaited(_hydrateFromApi(prefs));
+    _startHeartbeatLoop();
   }
 
   Future<void> _hydrateFromApi(SharedPreferences prefs) async {
@@ -102,6 +104,7 @@ class Session extends ChangeNotifier {
     await _heartbeat();
     sync?.onQueueChanged = notifyListeners;
     sync?.startWatcher();
+    _startHeartbeatLoop();
     notifyListeners();
   }
 
@@ -139,12 +142,19 @@ class Session extends ChangeNotifier {
 
   Future<void> _heartbeat() async {
     final id = establishmentId;
-    if (id == null || sync == null) return;
+    if (id == null || sync == null || api.token == null) return;
     await sync!.heartbeat(
       establishmentId: id,
       deviceName: '${role ?? 'POSTE'}-${user?['username'] ?? 'anon'}',
       role: role ?? 'INCONNU',
     );
+  }
+
+  void _startHeartbeatLoop() {
+    _hb?.cancel();
+    _hb = Timer.periodic(const Duration(seconds: 40), (_) {
+      if (user != null) unawaited(_heartbeat());
+    });
   }
 
   Future<void> _loadEstablishments() async {
@@ -188,6 +198,8 @@ class Session extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    _hb?.cancel();
+    _hb = null;
     if (api.refreshToken != null) {
       try {
         await api.post('/auth/logout', {'refreshToken': api.refreshToken});

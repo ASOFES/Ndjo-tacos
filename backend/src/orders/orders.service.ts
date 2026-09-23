@@ -15,20 +15,45 @@ export function isDrinkCategory(name?: string | null) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
-  return normalized.includes('boisson');
+  if (!normalized) return false;
+  return (
+    normalized.includes('boisson') ||
+    normalized.includes('soda') ||
+    normalized.includes('fanta') ||
+    normalized.includes('coca') ||
+    normalized.includes('sprite') ||
+    normalized.includes('eau miner') ||
+    normalized === 'eau'
+  );
 }
 
-/** Commandes cuisine : hors boissons seules, pour ne pas noyer le tableau (take) avec les PRETE caisse. */
+export function isDrinkProduct(product: {
+  code?: string | null;
+  name?: string | null;
+  subcategory?: string | null;
+  category?: { name?: string | null } | null;
+}) {
+  const code = (product.code ?? '').toUpperCase();
+  return (
+    code.startsWith('BOI-') ||
+    isDrinkCategory(product.category?.name) ||
+    isDrinkCategory(product.subcategory) ||
+    isDrinkCategory(product.name)
+  );
+}
+
+/** Cuisine : plats à préparer seulement. TERMINÉ (PRETE) sort du tableau vers caisse / livraisons. */
 export function kitchenBoardWhere(establishmentId: string): Prisma.OrderWhereInput {
   return {
     establishmentId,
-    status: { in: ['NOUVELLE', 'EN_PREPARATION', 'PRETE'] },
+    status: { in: ['NOUVELLE', 'EN_PREPARATION'] },
     items: {
       some: {
         product: {
-          category: {
-            NOT: { name: { contains: 'boisson', mode: 'insensitive' } },
-          },
+          OR: [
+            { category: { is: null } },
+            { category: { name: { not: { contains: 'boisson', mode: 'insensitive' } } } },
+          ],
         },
       },
     },
@@ -156,7 +181,7 @@ export class OrdersService {
         include: { category: true },
       });
       const drinkIds = new Set(
-        products.filter((row) => isDrinkCategory(row.category?.name)).map((row) => row.id),
+        products.filter((row) => isDrinkProduct(row)).map((row) => row.id),
       );
       const lines = items.map((item) => {
         const product = products.find((row) => row.id === item.productId);
@@ -451,7 +476,7 @@ export class OrdersService {
       if (!product) continue;
       const qty = Number(line.quantity);
       const dish = product.name;
-      if (isDrinkCategory(product.category?.name) && !product.recipe?.items?.length) {
+      if (isDrinkProduct(product) && !product.recipe?.items?.length) {
         add(product.id, product.name, dish, qty);
         continue;
       }
@@ -476,7 +501,7 @@ export class OrdersService {
         include: { category: true },
       });
       const drinkIds = new Set(
-        products.filter((row) => isDrinkCategory(row.category?.name)).map((row) => row.id),
+        products.filter((row) => isDrinkProduct(row)).map((row) => row.id),
       );
       await this.consumeDrinkLinesTx(tx, {
         orderNumber: order.number,
@@ -534,7 +559,7 @@ export class OrdersService {
         include: { category: true },
       });
       const drinkIds = new Set(
-        products.filter((row) => isDrinkCategory(row.category?.name)).map((row) => row.id),
+        products.filter((row) => isDrinkProduct(row)).map((row) => row.id),
       );
       const kitchenLines = order.items.filter((line) => !drinkIds.has(line.productId));
       if (kitchenLines.length === 0) return order;

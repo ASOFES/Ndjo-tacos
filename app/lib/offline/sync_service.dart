@@ -386,7 +386,10 @@ class SyncService {
       final name = category is Map
           ? category['name']?.toString() ?? ''
           : product['categoryName']?.toString() ?? '';
-      return !name.toLowerCase().contains('boisson');
+      final productName = product['name']?.toString() ?? map['name']?.toString() ?? '';
+      final code = product['code']?.toString() ?? '';
+      final blob = '${name.toLowerCase()} ${productName.toLowerCase()} ${code.toLowerCase()}';
+      return !blob.contains('boisson') && !code.toUpperCase().startsWith('BOI-') && !blob.contains('fanta') && !blob.contains('coca') && !blob.contains('sprite');
     });
   }
 
@@ -408,7 +411,7 @@ class SyncService {
       final kitchen = orders.where((item) {
         if (item is! Map) return false;
         final status = item['status']?.toString();
-        return status == 'NOUVELLE' || status == 'EN_PREPARATION' || status == 'PRETE';
+        return status == 'NOUVELLE' || status == 'EN_PREPARATION';
       }).toList();
       await store.cacheKitchen(establishmentId, kitchen);
       await store.cacheList('kitchen-$establishmentId', kitchen);

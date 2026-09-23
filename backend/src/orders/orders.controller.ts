@@ -14,7 +14,7 @@ import { JwtGuard } from '../auth/jwt.guard';
 import { AccessGuard } from '../auth/access.guard';
 import { RequirePermission } from '../auth/require-permission.decorator';
 import { PaymentService } from '../payments/payment.service';
-import { OrdersService, isDrinkCategory, kitchenBoardWhere } from './orders.service';
+import { OrdersService, isDrinkProduct, kitchenBoardWhere } from './orders.service';
 import { WhatsAppService } from '../notifications/whatsapp.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
 import { assertSameEstablishment, AuthedRequest, mustExist } from '../auth/scope';
@@ -75,16 +75,29 @@ export class OrdersController {
       where: { id: { in: productIds } },
       include: { category: true },
     });
-    const drinkIds = new Set(
-      products.filter((row) => isDrinkCategory(row.category?.name)).map((row) => row.id),
-    );
+    const drinkIds = new Set(products.filter((row) => isDrinkProduct(row)).map((row) => row.id));
     const kitchenOrders = orders.filter((order) =>
       order.items.some((item) => !drinkIds.has(item.productId)),
     );
     if (kitchenOrders.length === 0) return [];
     const recipes = await this.prisma.recipe.findMany({
       where: { productId: { in: productIds.filter((id) => !drinkIds.has(id)) } },
-      include: { items: { include: { ingredient: { select: { name: true, unit: true } } } } },
+      include: {
+        items: {
+          include: {
+            ingredient: {
+              select: {
+                name: true,
+                unit: true,
+                code: true,
+                kind: true,
+                subcategory: true,
+                category: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
     });
     const recipeByProduct = new Map(recipes.map((recipe) => [recipe.productId, recipe]));
     const movements = await this.prisma.stockMovement.findMany({
@@ -130,11 +143,13 @@ export class OrdersController {
             name: item.name,
             quantity: item.quantity,
             foods: recipe
-              ? recipe.items.map((row) => ({
-                  name: row.ingredient.name,
-                  quantity: row.quantity * item.quantity,
-                  unit: row.ingredient.unit,
-                }))
+              ? recipe.items
+                  .filter((row) => !isDrinkProduct(row.ingredient))
+                  .map((row) => ({
+                    name: row.ingredient.name,
+                    quantity: row.quantity * item.quantity,
+                    unit: row.ingredient.unit,
+                  }))
               : [{ name: item.name, quantity: item.quantity, unit: '' }],
           };
         }),
