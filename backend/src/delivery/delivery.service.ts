@@ -151,18 +151,27 @@ export class DeliveryService {
     );
     let resolved = driverId;
     if (!resolved) {
-      const nearest = await this.prisma.user.findFirst({
-        where: {
-          role: 'LIVREUR',
-          availability: 'DISPONIBLE',
-          status: 'ACTIF',
-          establishmentId: current.establishmentId,
-        },
-      });
+      const nearest =
+        (await this.prisma.user.findFirst({
+          where: {
+            role: 'LIVREUR',
+            availability: 'DISPONIBLE',
+            status: 'ACTIF',
+            establishmentId: current.establishmentId,
+          },
+        })) ??
+        (await this.prisma.user.findFirst({
+          where: {
+            role: 'LIVREUR',
+            status: 'ACTIF',
+            establishmentId: current.establishmentId,
+          },
+          orderBy: { name: 'asc' },
+        }));
       resolved = nearest?.id;
     }
     if (!resolved) {
-      throw new BadRequestException('Aucun livreur disponible');
+      throw new BadRequestException('Aucun livreur dans cet établissement. Créez un compte rôle Livreur.');
     }
     const trackingToken = current.trackingToken ?? createTrackingToken();
     const now = new Date();

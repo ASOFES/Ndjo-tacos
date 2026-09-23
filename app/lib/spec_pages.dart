@@ -914,6 +914,69 @@ class _DeliveryPageState extends State<DeliveryPage> {
     );
   }
 
+  Future<void> _assignOrder(Map<String, dynamic> order) async {
+    if (drivers.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aucun livreur dans cet établissement.')),
+      );
+      return;
+    }
+    final rows = [
+      for (final item in drivers)
+        if (item is Map) Map<String, dynamic>.from(item),
+    ];
+    String? chosen;
+    for (final row in rows) {
+      if (row['availability']?.toString() == 'DISPONIBLE') {
+        chosen = row['id']?.toString();
+        break;
+      }
+    }
+    chosen ??= rows.first['id']?.toString();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('Affecter un livreur'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Hors ligne = le livreur n’a pas ouvert l’app. Vous pouvez quand même l’affecter à la course.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: chosen,
+                  isExpanded: true,
+                  items: rows
+                      .map(
+                        (map) => DropdownMenuItem(
+                          value: map['id'].toString(),
+                          child: Text('${map['name']} · ${_driverStatus(map['availability']?.toString())}'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setLocal(() => chosen = value),
+                  decoration: const InputDecoration(labelText: 'Livreur'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Affecter')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || chosen == null) return;
+    await _run(() => _syncEvent('assign', order['id'].toString(), {'driverId': chosen}));
+  }
+
   void _openMap(Map<String, dynamic> data) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -954,7 +1017,10 @@ class _DeliveryPageState extends State<DeliveryPage> {
         ],
         const SizedBox(height: 12),
         const Text('Livreurs', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-        const Text('Disponible = application ouverte. Hors ligne = pas connecté.', style: TextStyle(color: NdjoColors.muted, fontSize: 12)),
+        const Text(
+          'Hors ligne tant que le livreur ne se connecte pas avec son compte. Vous pouvez l’affecter quand même (bouton Affecter sur la commande).',
+          style: TextStyle(color: NdjoColors.muted, fontSize: 12),
+        ),
         ...drivers.map((item) {
           final driver = item as Map<String, dynamic>;
           return Card(
@@ -1008,8 +1074,8 @@ class _DeliveryPageState extends State<DeliveryPage> {
                         label: const Text('Carte'),
                       ),
                       if (!isDriver && order['driver'] == null)
-                        FilledButton(onPressed: () => _run(() => _syncEvent('assign', order['id'].toString())), child: const Text('Affecter')),
-                      if (order['status'] == 'PRETE')
+                        FilledButton(onPressed: () => _assignOrder(order), child: const Text('Affecter')),
+                      if (order['status'] == 'PRETE' && order['driver'] != null)
                         FilledButton(onPressed: () => _run(() => _syncEvent('start', order['id'].toString())), child: const Text('Démarrer livraison')),
                       if (order['status'] == 'EN_LIVRAISON') ...[
                         OutlinedButton(onPressed: () => _sendOtp(order), child: const Text('Envoyer OTP')),
