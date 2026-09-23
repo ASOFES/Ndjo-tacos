@@ -47,16 +47,6 @@ export function kitchenBoardWhere(establishmentId: string): Prisma.OrderWhereInp
   return {
     establishmentId,
     status: { in: ['NOUVELLE', 'EN_PREPARATION'] },
-    items: {
-      some: {
-        product: {
-          OR: [
-            { category: { is: null } },
-            { category: { name: { not: { contains: 'boisson', mode: 'insensitive' } } } },
-          ],
-        },
-      },
-    },
   };
 }
 
