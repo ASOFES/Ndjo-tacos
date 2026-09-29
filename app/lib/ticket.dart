@@ -85,7 +85,6 @@ String ticketMessage(Session session, Map<String, dynamic> order, {required bool
   final pdf = ticketPdfUrl(order);
   return [
     NdjoCompany.brand,
-    NdjoCompany.legalName,
     'Tél. ${NdjoCompany.phone}',
     if (shop.isNotEmpty) 'Établissement : $shop',
     title,
@@ -172,9 +171,8 @@ String ticketHtml(Session session, Map<String, dynamic> order, {required bool in
   th:last-child, td:last-child { text-align: right; }
   .total { font-size: 18px; font-weight: 800; }
   .muted { color: #555; }
-  .letterhead { border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 16px; font-size: 12px; line-height: 1.45; }
+  .letterhead { border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 12px; font-size: 12px; line-height: 1.4; }
   .letterhead .brand { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
-  .letterhead .legal { font-weight: 700; margin-bottom: 6px; }
   @media print { .noprint { display: none; } body { padding: 0; } }
 </style>
 </head>

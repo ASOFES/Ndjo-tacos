@@ -129,24 +129,22 @@ function assemble(pages: Page[]) {
 function letterhead(ops: string[], compact: boolean) {
   ops.push(rect(0, PAGE_H - 56, PAGE_W, 56, ORANGE));
   ops.push(text(COMPANY.brand, MARGIN, PAGE_H - 28, 16, true, WHITE));
-  ops.push(text('IPIP SARLU  ·  Lubumbashi', PAGE_W - MARGIN, PAGE_H - 28, 9, false, WHITE, 'right'));
+  ops.push(text(COMPANY.phone, PAGE_W - MARGIN, PAGE_H - 28, 9, false, WHITE, 'right'));
   ops.push(rect(0, PAGE_H - 60, PAGE_W, 4, ACCENT));
   if (compact) return PAGE_H - 78;
-  ops.push(text(COMPANY.legalName, MARGIN, PAGE_H - 76, 8, true, INK, 'left', CONTENT_W));
-  ops.push(text(COMPANY.address, MARGIN, PAGE_H - 88, 8, false, MUTED, 'left', CONTENT_W));
   ops.push(
     text(
-      `RCCM ${COMPANY.rccm}   ·   ID. NAT. ${COMPANY.idNat}   ·   NIF ${COMPANY.nif}   ·   ${COMPANY.phone}`,
+      `ID. NAT. ${COMPANY.idNat}   ·   NIF ${COMPANY.nif}`,
       MARGIN,
-      PAGE_H - 100,
-      7.5,
+      PAGE_H - 78,
+      8,
       false,
       MUTED,
       'left',
       CONTENT_W,
     ),
   );
-  return PAGE_H - 118;
+  return PAGE_H - 96;
 }
 
 function footer(ops: string[], page: number, total: number) {

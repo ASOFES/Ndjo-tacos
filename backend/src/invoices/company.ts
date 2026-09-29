@@ -12,22 +12,15 @@ export const COMPANY = {
 export function companyPdfLines() {
   return [
     COMPANY.brand,
-    'INSTITUTS DE PREPARATION ET D INTEGRATION PROFESSIONNELLE - IPIP SARLU',
-    'Adresse : 13, avenue Moero, quartier Makutano, commune de Lubumbashi',
-    'Ville de Lubumbashi, Haut-Katanga, RDC',
-    `RCCM : ${COMPANY.rccm}`,
+    `Telephone : ${COMPANY.phone}`,
     `ID. NAT. : ${COMPANY.idNat}`,
     `NIF : ${COMPANY.nif}`,
-    `Telephone : ${COMPANY.phone}`,
   ];
 }
 
 export function companyPublic() {
   return {
     brand: COMPANY.brand,
-    legalName: 'INSTITUTS DE PRÉPARATION ET D’INTÉGRATION PROFESSIONNELLE — IPIP SARLU',
-    address: COMPANY.address,
-    rccm: COMPANY.rccm,
     idNat: COMPANY.idNat,
     nif: COMPANY.nif,
     phone: COMPANY.phone,

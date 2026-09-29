@@ -684,7 +684,7 @@ export class ExportService {
             'CA net = apres remises. CA brut et remises sont separes pour la transparence.',
             'Transferts et sorties magasin→cuisine = journal stock (hors benefice).',
             'Le prix de vente catalogue ne change pas. La depense et le benefice suivent le prix d achat de chaque lot sorti (FEFO).',
-            'Document genere pour l etablissement selectionne. Usage interne IPIP SARLU / NDJO TACOS.',
+            'Document genere pour l etablissement selectionne. Usage interne NDJO TACOS.',
           ],
         },
       ),

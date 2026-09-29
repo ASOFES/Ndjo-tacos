@@ -15,12 +15,9 @@ class NdjoCompany {
 
   static List<String> get printLines => [
         brand,
-        legalName,
-        'Adresse physique : $address',
-        'RCCM : $rccm',
+        'Téléphone : $phone',
         'ID. NAT. : $idNat',
         'NIF : $nif',
-        'Téléphone : $phone',
       ];
 }
 
@@ -33,12 +30,8 @@ String ndjoCompanyHtml() {
   return '''
   <div class="letterhead">
     <div class="brand">${esc(NdjoCompany.brand)}</div>
-    <div class="legal">${esc(NdjoCompany.legalName)}</div>
-    <div>${esc(NdjoCompany.address)}</div>
-    <div>RCCM : ${esc(NdjoCompany.rccm)}</div>
-    <div>ID. NAT. : ${esc(NdjoCompany.idNat)}</div>
-    <div>NIF : ${esc(NdjoCompany.nif)}</div>
     <div>Téléphone : ${esc(NdjoCompany.phone)}</div>
+    <div>ID. NAT. : ${esc(NdjoCompany.idNat)} · NIF : ${esc(NdjoCompany.nif)}</div>
   </div>
 ''';
 }
@@ -52,14 +45,8 @@ Widget ndjoLetterhead({bool compact = false}) {
         children: [
           const Text(NdjoCompany.brand, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: NdjoColors.accent)),
           const SizedBox(height: 6),
-          const Text(NdjoCompany.legalName, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, height: 1.35)),
-          const SizedBox(height: 6),
-          const Text(NdjoCompany.address, style: TextStyle(color: NdjoColors.muted, fontSize: 12, height: 1.35)),
-          const SizedBox(height: 8),
-          const Text('RCCM : ${NdjoCompany.rccm}', style: TextStyle(fontSize: 12)),
-          const Text('ID. NAT. : ${NdjoCompany.idNat}', style: TextStyle(fontSize: 12)),
-          const Text('NIF : ${NdjoCompany.nif}', style: TextStyle(fontSize: 12)),
           const Text('Téléphone : ${NdjoCompany.phone}', style: TextStyle(fontSize: 12)),
+          const Text('ID. NAT. : ${NdjoCompany.idNat} · NIF : ${NdjoCompany.nif}', style: TextStyle(fontSize: 12)),
         ],
       ),
     ),
