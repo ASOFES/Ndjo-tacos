@@ -62,7 +62,9 @@ class Session extends ChangeNotifier {
 
   Future<void> _hydrateFromApi(SharedPreferences prefs) async {
     try {
-      appUpdate = await api.getJson('/updates/app?platform=web&build=${Api.appBuild}');
+      appUpdate = await api.getJson(
+        '/updates/app?platform=${Uri.encodeQueryComponent(Api.appPlatform)}&build=${Api.appBuild}',
+      );
       notifyListeners();
     } catch (_) {
       appUpdate = {'updateAvailable': false};

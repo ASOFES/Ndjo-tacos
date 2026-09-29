@@ -783,30 +783,50 @@ class _UpdatesPageState extends State<UpdatesPage> {
   }
 
   Future<void> _createVersion() async {
-    final version = TextEditingController(text: '1.1.0');
-    final build = TextEditingController(text: '2');
+    final version = TextEditingController(text: '1.0.0');
+    final build = TextEditingController(text: '8');
     final notes = TextEditingController(text: 'Correctifs caisse et catalogue en ligne.');
+    final url = TextEditingController();
     var force = false;
+    var platform = 'android';
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
           title: const Text('Nouvelle version APK / app'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: version, decoration: const InputDecoration(labelText: 'Version')),
-              const SizedBox(height: 8),
-              TextField(controller: build, decoration: const InputDecoration(labelText: 'Build')),
-              const SizedBox(height: 8),
-              TextField(controller: notes, decoration: const InputDecoration(labelText: 'Notes')),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Mise à jour forcée'),
-                value: force,
-                onChanged: (value) => setLocal(() => force = value),
-              ),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  value: platform,
+                  decoration: const InputDecoration(labelText: 'Plateforme'),
+                  items: const [
+                    DropdownMenuItem(value: 'android', child: Text('Android (APK)')),
+                    DropdownMenuItem(value: 'windows', child: Text('Windows')),
+                    DropdownMenuItem(value: 'web', child: Text('Web')),
+                  ],
+                  onChanged: (value) => setLocal(() => platform = value ?? 'android'),
+                ),
+                const SizedBox(height: 8),
+                TextField(controller: version, decoration: const InputDecoration(labelText: 'Version')),
+                const SizedBox(height: 8),
+                TextField(controller: build, decoration: const InputDecoration(labelText: 'Build')),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: url,
+                  decoration: const InputDecoration(labelText: 'Lien de téléchargement (APK / zip)'),
+                ),
+                const SizedBox(height: 8),
+                TextField(controller: notes, decoration: const InputDecoration(labelText: 'Notes')),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Mise à jour forcée'),
+                  value: force,
+                  onChanged: (value) => setLocal(() => force = value),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
@@ -819,7 +839,8 @@ class _UpdatesPageState extends State<UpdatesPage> {
     await widget.session.api.post('/admin/app-versions', {
       'version': version.text,
       'buildNumber': int.parse(build.text),
-      'platform': 'web',
+      'platform': platform,
+      'downloadUrl': url.text.trim().isEmpty ? null : url.text.trim(),
       'notes': notes.text,
       'minBuild': int.parse(build.text),
       'forceUpdate': force,

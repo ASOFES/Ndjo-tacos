@@ -7,7 +7,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class Api {
   static const appVersion = '1.0.0';
-  static const appBuild = 6;
+  static const appBuild = 8;
+
+  static String get appPlatform {
+    if (kIsWeb) return 'web';
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return 'android';
+      case TargetPlatform.iOS:
+        return 'ios';
+      case TargetPlatform.windows:
+        return 'windows';
+      default:
+        return defaultTargetPlatform.name.toLowerCase();
+    }
+  }
   static const prefsKey = 'ndjo_api_base';
   static String? _override;
 

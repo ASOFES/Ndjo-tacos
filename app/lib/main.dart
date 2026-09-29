@@ -13,6 +13,7 @@ import 'customers_page.dart';
 import 'inventory_pages.dart';
 import 'purchases_page.dart';
 import 'reports_page.dart';
+import 'open_link.dart';
 import 'ops_center.dart';
 import 'ops_pages.dart';
 import 'pages.dart';
@@ -150,9 +151,13 @@ class _Home extends StatelessWidget {
   Widget build(BuildContext context) {
     final update = session.appUpdate;
     final force = update?['force'] == true || update?['updateRequired'] == true;
-    if (force && session.user == null) {
-      return ForcedUpdateScreen(update: update!);
+    if (force) {
+      return ForcedUpdateScreen(update: update ?? <String, dynamic>{});
     }
+    return _withOptionalBanner(_shell(), update);
+  }
+
+  Widget _shell() {
     if (session.clientMode && session.user == null) {
       return ClientShell(session: session);
     }
@@ -187,6 +192,36 @@ class _Home extends StatelessWidget {
         return AdminShell(key: const ValueKey('admin-shell'), session: session);
     }
   }
+
+  Widget _withOptionalBanner(Widget child, Map<String, dynamic>? update) {
+    if (update?['updateAvailable'] != true) return child;
+    final url = update?['url']?.toString() ?? '';
+    return Column(
+      children: [
+        Material(
+          color: NdjoColors.accent,
+          child: SafeArea(
+            bottom: false,
+            child: ListTile(
+              dense: true,
+              leading: const Icon(Icons.system_update, color: Colors.white),
+              title: Text(
+                'Nouvelle version ${update?['version'] ?? ''} disponible',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              ),
+              trailing: url.isEmpty
+                  ? null
+                  : TextButton(
+                      onPressed: () => openExternal(url),
+                      child: const Text('Télécharger', style: TextStyle(color: Colors.white)),
+                    ),
+            ),
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    );
+  }
 }
 
 class ForcedUpdateScreen extends StatelessWidget {
@@ -215,6 +250,20 @@ class ForcedUpdateScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     Text('${update['notes']}', textAlign: TextAlign.center),
                   ],
+                  const SizedBox(height: 20),
+                  if ((update['url']?.toString() ?? '').isNotEmpty)
+                    FilledButton.icon(
+                      onPressed: () => openExternal(update['url'].toString()),
+                      icon: const Icon(Icons.download),
+                      label: const Text('Télécharger et installer'),
+                      style: FilledButton.styleFrom(backgroundColor: NdjoColors.primary),
+                    )
+                  else
+                    const Text(
+                      'Demandez le nouveau fichier d’installation à l’administrateur.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: NdjoColors.muted),
+                    ),
                 ],
               ),
             ),
