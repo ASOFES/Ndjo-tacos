@@ -1270,7 +1270,7 @@ class _ClientShopPageState extends State<ClientShopPage> {
         'establishmentId': placeId,
         'type': type,
         'customerName': name.text.trim().isEmpty ? (widget.session.user?['name'] ?? 'Client') : name.text.trim(),
-        'customerPhone': phone.text.trim().isEmpty ? widget.session.user?['phone'] : phone.text.trim(),
+        'customerPhone': phone.text.trim().isEmpty ? (widget.session.user?['phone']) : phone.text.trim(),
         'address': address.text.trim(),
         'zoneId': type == 'LIVRAISON' ? zoneId : null,
         'items': cart.values.map((item) => {'productId': item['productId'], 'quantity': item['qty']}).toList(),
