@@ -6,6 +6,7 @@ import 'export_file.dart';
 import 'session.dart';
 import 'theme.dart';
 import 'time_fmt.dart';
+import 'product_kind.dart';
 
 bool ndjoPageVisible(BuildContext context) => TickerMode.of(context);
 
@@ -43,12 +44,20 @@ String orderPayLabel(Map<String, dynamic> order) {
 }
 
 String orderItemsLine(Map<String, dynamic> order) {
-  final items = order['items'] as List<dynamic>? ?? [];
-  if (items.isEmpty) return '';
-  return items.map((item) {
-    final map = item is Map ? Map<String, dynamic>.from(item) : <String, dynamic>{};
-    return '${map['quantity'] ?? 1} × ${map['name'] ?? ''}';
-  }).join(', ');
+  final kitchen = orderSplitLines(orderKitchenItems(order));
+  final drinks = orderSplitLines(orderCounterDrinks(order));
+  if (kitchen.isEmpty && drinks.isEmpty) {
+    final items = order['items'] as List<dynamic>? ?? [];
+    if (items.isEmpty) return '';
+    return items.map((item) {
+      final map = item is Map ? Map<String, dynamic>.from(item) : <String, dynamic>{};
+      return '${map['quantity'] ?? 1} × ${map['name'] ?? ''}';
+    }).join(', ');
+  }
+  return [
+    if (kitchen.isNotEmpty) 'Cuisine : $kitchen',
+    if (drinks.isNotEmpty) 'Boissons (interne) : $drinks',
+  ].join('\n');
 }
 
 String orderShortageMessage(Map<String, dynamic> order) {
@@ -287,11 +296,17 @@ Widget cashierClientInbox({
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text('Commandes client à envoyer en cuisine', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-      const Text('Payées ou non : la cuisine ne les voit qu’après validation caisse.', style: TextStyle(color: NdjoColors.muted, fontSize: 12)),
+      const Text('Commandes client à envoyer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+      const Text(
+        'Nourriture → cuisine après validation. Boissons → sortie stock interne, jamais au tableau cuisine.',
+        style: TextStyle(color: NdjoColors.muted, fontSize: 12),
+      ),
       const SizedBox(height: 8),
       ...waiting.map((order) {
         final shortage = orderShortageMessage(order);
+        final kitchen = orderKitchenItems(order);
+        final drinks = orderCounterDrinks(order);
+        final sendLabel = kitchen.isEmpty ? 'Valider en interne' : 'Envoyer à la cuisine';
         return Card(
           color: shortage.isEmpty ? null : const Color(0xFFFFEBEE),
           child: Padding(
@@ -302,10 +317,18 @@ Widget cashierClientInbox({
                 Text('${order['number']} · ${orderPayLabel(order)}', style: const TextStyle(fontWeight: FontWeight.w800)),
                 NdjoWhenText(order),
                 Text('${order['type']} · ${order['customerName'] ?? order['user']?['name'] ?? ''}'),
-                if (orderItemsLine(order).isNotEmpty)
+                if (kitchen.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Text(orderItemsLine(order), style: const TextStyle(color: NdjoColors.muted)),
+                    child: Text('Cuisine : ${orderSplitLines(kitchen)}', style: const TextStyle(color: NdjoColors.muted)),
+                  ),
+                if (drinks.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Boissons (interne) : ${orderSplitLines(drinks)}',
+                      style: const TextStyle(color: NdjoColors.accent, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 if (shortage.isNotEmpty)
                   Padding(
@@ -326,7 +349,7 @@ Widget cashierClientInbox({
                     FilledButton(
                       onPressed: () => onSend(order['id'].toString()),
                       style: FilledButton.styleFrom(backgroundColor: NdjoColors.primary),
-                      child: const Text('Envoyer à la cuisine'),
+                      child: Text(sendLabel),
                     ),
                   ],
                 ),

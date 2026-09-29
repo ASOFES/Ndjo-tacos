@@ -107,6 +107,14 @@ class Session extends ChangeNotifier {
     final id = establishmentId;
     if (id != null) await sync?.pull(id);
     await _heartbeat();
+    if (role == 'LIVREUR') {
+      try {
+        final live = await api.post('/delivery/availability', {'availability': 'DISPONIBLE'});
+        user?['availability'] = live['availability'] ?? 'DISPONIBLE';
+      } catch (_) {
+        user?['availability'] = 'DISPONIBLE';
+      }
+    }
     sync?.onQueueChanged = _onSyncQueue;
     sync?.startWatcher();
     _startHeartbeatLoop();
@@ -148,11 +156,13 @@ class Session extends ChangeNotifier {
   Future<void> _heartbeat() async {
     final id = establishmentId;
     if (id == null || sync == null || api.token == null) return;
-    await sync!.heartbeat(
-      establishmentId: id,
-      deviceName: '${role ?? 'POSTE'}-${user?['username'] ?? 'anon'}',
-      role: role ?? 'INCONNU',
-    );
+    try {
+      await sync!.heartbeat(
+        establishmentId: id,
+        deviceName: '${role ?? 'POSTE'}-${user?['username'] ?? 'anon'}',
+        role: role ?? 'INCONNU',
+      );
+    } catch (_) {}
   }
 
   void _startHeartbeatLoop() {

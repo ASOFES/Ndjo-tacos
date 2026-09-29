@@ -4,6 +4,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import '../api.dart';
+import '../product_kind.dart';
 import 'local_store.dart';
 
 class SyncService {
@@ -381,20 +382,17 @@ class SyncService {
       final productId = map['id']?.toString();
       if (productId != null) byId[productId] = map;
     }
-    if (byId.isEmpty) return true;
+    if (byId.isEmpty) {
+      return items.any((item) {
+        if (item is! Map) return true;
+        return !isNdjoDrink(item);
+      });
+    }
     return items.any((item) {
       if (item is! Map) return true;
       final map = Map<String, dynamic>.from(item);
-      final product = byId[map['productId']?.toString()];
-      if (product == null) return true;
-      final category = product['category'];
-      final name = category is Map
-          ? category['name']?.toString() ?? ''
-          : product['categoryName']?.toString() ?? '';
-      final productName = product['name']?.toString() ?? map['name']?.toString() ?? '';
-      final code = product['code']?.toString() ?? '';
-      final blob = '${name.toLowerCase()} ${productName.toLowerCase()} ${code.toLowerCase()}';
-      return !blob.contains('boisson') && !code.toUpperCase().startsWith('BOI-') && !blob.contains('fanta') && !blob.contains('coca') && !blob.contains('sprite');
+      final product = byId[map['productId']?.toString()] ?? map;
+      return !isNdjoDrink(product);
     });
   }
 

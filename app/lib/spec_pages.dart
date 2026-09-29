@@ -615,6 +615,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
       if (mounted && ndjoPageVisible(context)) _load();
     });
     if (widget.session.role == 'LIVREUR') {
+      _markOnline();
       _gpsTimer = Timer.periodic(const Duration(seconds: 15), (_) => _pushActiveGps());
     }
   }
@@ -624,6 +625,15 @@ class _DeliveryPageState extends State<DeliveryPage> {
     _gpsTimer?.cancel();
     _poll?.cancel();
     super.dispose();
+  }
+
+  Future<void> _markOnline() async {
+    try {
+      final result = await widget.session.api.post('/delivery/availability', {'availability': 'DISPONIBLE'});
+      if (!mounted) return;
+      widget.session.user?['availability'] = result['availability'] ?? 'DISPONIBLE';
+      setState(() => availability = result['availability']?.toString() ?? 'DISPONIBLE');
+    } catch (_) {}
   }
 
   Future<void> _load() async {
@@ -646,7 +656,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
       }
       final nextDeliveries = loadedDeliveries.isNotEmpty ? loadedDeliveries : deliveries;
       final nextDrivers = loadedDrivers.isNotEmpty ? loadedDrivers : drivers;
-      final nextAvailability = liveAvailability ?? widget.session.user?['availability']?.toString() ?? 'HORS_LIGNE';
+      final nextAvailability = liveAvailability ?? widget.session.user?['availability']?.toString() ?? (widget.session.role == 'LIVREUR' ? 'DISPONIBLE' : 'HORS_LIGNE');
       if (ndjoRowsFp(nextDeliveries) == ndjoRowsFp(deliveries) &&
           ndjoRowsFp(nextDrivers) == ndjoRowsFp(drivers) &&
           nextAvailability == availability) {
@@ -1229,21 +1239,46 @@ class _ClientShopPageState extends State<ClientShopPage> {
     setState(() {
       categories = loaded[0];
       zones = loaded[1];
-      if (zoneId == null && zones.isNotEmpty) zoneId = zones.first['id'].toString();
+      final ids = zones.map((item) => item is Map ? item['id']?.toString() : null).toSet();
+      if (zoneId == null || !ids.contains(zoneId)) {
+        zoneId = zones.isNotEmpty ? zones.first['id'].toString() : null;
+      }
     });
   }
 
   Future<void> _order() async {
+    if (placeId == null || placeId!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Choisissez un établissement')));
+      return;
+    }
+    if (type == 'LIVRAISON') {
+      if (zoneId == null || zoneId!.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Choisissez une zone de livraison')));
+        return;
+      }
+      if (address.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Indiquez l’adresse de livraison')));
+        return;
+      }
+      if (phone.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Téléphone obligatoire pour la livraison')));
+        return;
+      }
+    }
     try {
       final order = await widget.session.api.post('/public/orders', {
         'establishmentId': placeId,
         'type': type,
-        'customerName': name.text,
-        'customerPhone': phone.text,
-        'address': address.text,
-        'zoneId': zoneId,
+        'customerName': name.text.trim().isEmpty ? (widget.session.user?['name'] ?? 'Client') : name.text.trim(),
+        'customerPhone': phone.text.trim().isEmpty ? widget.session.user?['phone'] : phone.text.trim(),
+        'address': address.text.trim(),
+        'zoneId': type == 'LIVRAISON' ? zoneId : null,
         'items': cart.values.map((item) => {'productId': item['productId'], 'quantity': item['qty']}).toList(),
       });
+      final number = order['number']?.toString();
+      if (number == null || number.isEmpty) {
+        throw ApiException(order['message']?.toString() ?? order['error']?.toString() ?? 'Commande refusée');
+      }
       setState(cart.clear);
       if (!mounted) return;
       final token = order['trackingToken']?.toString();
@@ -1253,7 +1288,7 @@ class _ClientShopPageState extends State<ClientShopPage> {
           'phone': phone.text,
         });
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Commande ${order['number']} reçue à la caisse. Payée ou non, la cuisine la verra après validation. Suivi : ${token ?? '—'}')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Commande $number reçue à la caisse. La nourriture part en cuisine après validation ; les boissons restent en interne.')));
       if (token != null) {
         await Navigator.of(context).push(
           MaterialPageRoute(
@@ -1283,7 +1318,12 @@ class _ClientShopPageState extends State<ClientShopPage> {
             initialValue: placeId,
             items: places.map((item) => DropdownMenuItem(value: item['id'].toString(), child: Text(item['name'].toString()))).toList(),
             onChanged: (value) {
-              setState(() => placeId = value);
+              setState(() {
+                placeId = value;
+                zoneId = null;
+                categories = [];
+                zones = [];
+              });
               _loadCatalog();
             },
             decoration: const InputDecoration(labelText: 'Choisir votre établissement'),

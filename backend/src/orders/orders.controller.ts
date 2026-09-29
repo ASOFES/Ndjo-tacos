@@ -259,25 +259,33 @@ export class OrdersController {
     });
     if (nextStatus === 'NOUVELLE' && current.status === 'EN_CAISSE') {
       const publicBase = process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000';
-      await this.whatsapp.notify({
-        orderId: order.id,
-        event: 'COMMANDE_CONFIRMEE',
-        title: 'Commande confirmée',
-        message: `Votre commande #${order.number} a été envoyée en cuisine. Suivi : ${publicBase}/track/${order.trackingToken}`,
-        phone: order.customerPhone,
-      });
+      try {
+        await this.whatsapp.notify({
+          orderId: order.id,
+          event: 'COMMANDE_CONFIRMEE',
+          title: 'Commande confirmée',
+          message: `Votre commande #${order.number} a été envoyée en cuisine. Suivi : ${publicBase}/track/${order.trackingToken}`,
+          phone: order.customerPhone,
+        });
+      } catch {
+        /* WhatsApp externe */
+      }
     }
     if (nextStatus === 'EN_PREPARATION' || nextStatus === 'PRETE') {
-      await this.whatsapp.notify({
-        orderId: order.id,
-        event: nextStatus === 'PRETE' ? 'PRETE' : 'EN_PREPARATION',
-        title: nextStatus === 'PRETE' ? 'Commande prête' : 'Commande en préparation',
-        message:
-          nextStatus === 'PRETE'
-            ? `Votre commande #${order.number} est prête.`
-            : `Votre commande #${order.number} est en préparation.`,
-        phone: order.customerPhone,
-      });
+      try {
+        await this.whatsapp.notify({
+          orderId: order.id,
+          event: nextStatus === 'PRETE' ? 'PRETE' : 'EN_PREPARATION',
+          title: nextStatus === 'PRETE' ? 'Commande prête' : 'Commande en préparation',
+          message:
+            nextStatus === 'PRETE'
+              ? `Votre commande #${order.number} est prête.`
+              : `Votre commande #${order.number} est en préparation.`,
+          phone: order.customerPhone,
+        });
+      } catch {
+        /* WhatsApp externe */
+      }
     }
     if (order.trackingToken) {
       this.live.emitStatus(order.trackingToken, {

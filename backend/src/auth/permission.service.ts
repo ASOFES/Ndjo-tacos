@@ -61,6 +61,26 @@ export class PermissionService implements OnModuleInit {
         });
       }
     }
+    const driverKeys = ['livraison.voir', 'livraison.maj', 'gps.envoyer'];
+    for (const key of driverKeys) {
+      const permissionId = idByKey[key];
+      if (!permissionId) continue;
+      await this.prisma.rolePermission.upsert({
+        where: { role_permissionId: { role: 'LIVREUR', permissionId } },
+        create: { role: 'LIVREUR', permissionId },
+        update: {},
+      });
+    }
+    const clientKeys = ['catalogue.voir', 'commandes.creer', 'zones.voir'];
+    for (const key of clientKeys) {
+      const permissionId = idByKey[key];
+      if (!permissionId) continue;
+      await this.prisma.rolePermission.upsert({
+        where: { role_permissionId: { role: 'CLIENT', permissionId } },
+        create: { role: 'CLIENT', permissionId },
+        update: {},
+      });
+    }
     const discountId = idByKey['ventes.remise'];
     if (discountId) {
       for (const role of ['GESTIONNAIRE', 'CAISSIER'] as const) {

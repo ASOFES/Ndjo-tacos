@@ -23,6 +23,12 @@ export function isDrinkCategory(name?: string | null) {
     normalized.includes('coca') ||
     normalized.includes('sprite') ||
     normalized.includes('eau miner') ||
+    normalized.includes('jus') ||
+    normalized.includes('biere') ||
+    normalized.includes('limonade') ||
+    normalized.includes('malta') ||
+    normalized.includes('energy') ||
+    normalized.includes('drink') ||
     normalized === 'eau'
   );
 }
@@ -31,15 +37,28 @@ export function isDrinkProduct(product: {
   code?: string | null;
   name?: string | null;
   subcategory?: string | null;
+  kind?: string | null;
   category?: { name?: string | null } | null;
 }) {
   const code = (product.code ?? '').toUpperCase();
   return (
     code.startsWith('BOI-') ||
+    code.startsWith('BEV-') ||
+    isDrinkCategory(product.kind) ||
     isDrinkCategory(product.category?.name) ||
     isDrinkCategory(product.subcategory) ||
     isDrinkCategory(product.name)
   );
+}
+
+export function splitOrderChannels<T extends { productId: string }>(
+  items: T[],
+  drinkIds: Set<string>,
+) {
+  return {
+    kitchenItems: items.filter((item) => !drinkIds.has(item.productId)),
+    counterItems: items.filter((item) => drinkIds.has(item.productId)),
+  };
 }
 
 /** Cuisine : plats à préparer seulement. TERMINÉ (PRETE) sort du tableau vers caisse / livraisons. */
@@ -300,17 +319,43 @@ export class OrdersService {
       return created;
     });
 
+    let presented;
+    try {
+      presented = await this.withSplit(order);
+    } catch {
+      presented = order;
+    }
+
     if (order.status !== 'EN_CAISSE') {
       const publicBase = process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000';
-      await this.whatsapp.notify({
-        orderId: order.id,
-        event: 'COMMANDE_CONFIRMEE',
-        title: 'Commande confirmée',
-        message: `Votre commande #${order.number} a été confirmée. Suivi : ${publicBase}/track/${order.trackingToken}`,
-        phone: order.customerPhone,
-      });
+      try {
+        await this.whatsapp.notify({
+          orderId: order.id,
+          event: 'COMMANDE_CONFIRMEE',
+          title: 'Commande confirmée',
+          message: `Votre commande #${order.number} a été confirmée. Suivi : ${publicBase}/track/${order.trackingToken}`,
+          phone: order.customerPhone,
+        });
+      } catch {
+        /* WhatsApp externe : ne bloque pas la commande */
+      }
     }
-    return order;
+    return presented;
+  }
+
+  async withSplit<T extends { items: { productId: string }[] }>(order: T) {
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: order.items.map((item) => item.productId) } },
+      include: { category: true },
+    });
+    const drinkIds = new Set(products.filter((row) => isDrinkProduct(row)).map((row) => row.id));
+    const split = splitOrderChannels(order.items, drinkIds);
+    return {
+      ...order,
+      split: split.kitchenItems.length > 0 && split.counterItems.length > 0,
+      kitchenItems: split.kitchenItems,
+      counterItems: split.counterItems,
+    };
   }
 
   private async assertDiscountApprover(
@@ -397,26 +442,49 @@ export class OrdersService {
     },
   >(orders: T[], establishmentId: string) {
     const waiting = orders.filter((order) => order.status === 'EN_CAISSE');
-    if (!waiting.length) return orders;
     const productIds = [
-      ...new Set(waiting.flatMap((order) => order.items.map((item) => item.productId))),
+      ...new Set(orders.flatMap((order) => order.items.map((item) => item.productId))),
     ];
     const products = await this.loadSaleCatalog(productIds);
     const allLines = waiting.flatMap((order) => order.items);
-    const needs = await this.expandedNeeds(allLines, products, this.prisma);
+    const needs = waiting.length
+      ? await this.expandedNeeds(allLines, products, this.prisma)
+      : [];
     const stockIds = [...new Set(needs.map((row) => row.productId))];
     const available = await this.stock.availableByProduct(establishmentId, stockIds);
-    const result: T[] = [];
+    const result: Array<
+      T & {
+        stockShortages?: StockShortage[];
+        stockShortageMessage?: string;
+        split?: boolean;
+        kitchenItems?: T['items'];
+        counterItems?: T['items'];
+      }
+    > = [];
     for (const order of orders) {
+      const drinkIds = new Set(
+        order.items
+          .map((item) => products.get(item.productId))
+          .filter((row): row is SaleProduct => Boolean(row))
+          .filter((row) => isDrinkProduct(row))
+          .map((row) => row.id),
+      );
+      const split = splitOrderChannels(order.items, drinkIds);
+      const base = {
+        ...order,
+        split: split.kitchenItems.length > 0 && split.counterItems.length > 0,
+        kitchenItems: split.kitchenItems,
+        counterItems: split.counterItems,
+      };
       if (order.status !== 'EN_CAISSE') {
-        result.push(order);
+        result.push(base);
         continue;
       }
       const shortages = (await this.expandedNeeds(order.items, products, this.prisma))
         .map((row) => ({ ...row, available: available.get(row.productId) ?? 0 }))
         .filter((row) => row.available + 0.0001 < row.needed);
       result.push({
-        ...order,
+        ...base,
         stockShortages: shortages,
         stockShortageMessage: shortages.length
           ? this.formatShortages(shortages, order.number)
