@@ -5,6 +5,7 @@ import 'api.dart';
 import 'company.dart';
 import 'open_link.dart';
 import 'pages.dart';
+import 'printer_prefs.dart';
 import 'product_kind.dart';
 import 'session.dart';
 import 'theme.dart';
@@ -103,7 +104,12 @@ String ticketMessage(Session session, Map<String, dynamic> order, {required bool
   ].join('\n');
 }
 
-String ticketHtml(Session session, Map<String, dynamic> order, {required bool invoice}) {
+String ticketHtml(
+  Session session,
+  Map<String, dynamic> order, {
+  required bool invoice,
+  int paperMm = 80,
+}) {
   final shop = ticketShopName(session, order);
   final invoiceMap = ticketInvoiceOf(order);
   final number = invoice ? (invoiceMap?['number'] ?? order['number'] ?? '') : (order['number'] ?? '');
@@ -116,22 +122,29 @@ String ticketHtml(Session session, Map<String, dynamic> order, {required bool in
   final items = ticketItems(order);
   final kitchen = orderKitchenItems(order);
   final drinks = orderCounterDrinks(order);
+  final narrow = paperMm <= 56;
   String rowsOf(List<Map<String, dynamic>> rows) => rows.map((item) {
     final qty = item['quantity'] ?? 1;
     final name = _esc('${item['name'] ?? ''}');
     final pu = fc((item['unitPrice'] as num?) ?? 0);
     final line = fc((item['lineTotal'] as num?) ?? ((item['unitPrice'] as num? ?? 0) * (item['quantity'] as num? ?? 1)));
-    return '<tr><td>$qty</td><td>$name</td><td>$pu</td><td>$line</td></tr>';
+    if (narrow) {
+      return '<tr><td class="qty">$qty</td><td>$name</td><td class="amt">$line</td></tr>';
+    }
+    return '<tr><td class="qty">$qty</td><td>$name</td><td class="amt">$pu</td><td class="amt">$line</td></tr>';
   }).join();
+  final head = narrow
+      ? '<tr><th class="qty">Qté</th><th>Article</th><th class="amt">Montant</th></tr>'
+      : '<tr><th class="qty">Qté</th><th>Désignation</th><th class="amt">PU</th><th class="amt">Montant</th></tr>';
   final sections = StringBuffer();
   if (kitchen.isNotEmpty) {
-    sections.writeln('<p><b>Nourriture (cuisine)</b></p><table><thead><tr><th>Qté</th><th>Désignation</th><th>PU</th><th>Montant</th></tr></thead><tbody>${rowsOf(kitchen)}</tbody></table>');
+    sections.writeln('<p><b>Nourriture</b></p><table><thead>$head</thead><tbody>${rowsOf(kitchen)}</tbody></table>');
   }
   if (drinks.isNotEmpty) {
-    sections.writeln('<p><b>Boissons (gestion interne)</b></p><table><thead><tr><th>Qté</th><th>Désignation</th><th>PU</th><th>Montant</th></tr></thead><tbody>${rowsOf(drinks)}</tbody></table>');
+    sections.writeln('<p><b>Boissons</b></p><table><thead>$head</thead><tbody>${rowsOf(drinks)}</tbody></table>');
   }
   if (kitchen.isEmpty && drinks.isEmpty) {
-    sections.writeln('<table><thead><tr><th>Qté</th><th>Désignation</th><th>PU</th><th>Montant</th></tr></thead><tbody>${rowsOf(items)}</tbody></table>');
+    sections.writeln('<table><thead>$head</thead><tbody>${rowsOf(items)}</tbody></table>');
   }
   final subtotal = (order['subtotal'] as num?) ?? 0;
   final discountAmount = (order['discountAmount'] as num?) ?? 0;
@@ -155,39 +168,60 @@ String ticketHtml(Session session, Map<String, dynamic> order, {required bool in
   final pdf = ticketPdfUrl(order);
   final shopPhone = session.establishment?['phone']?.toString() ?? order['establishment']?['phone']?.toString() ?? '';
   final shopAddress = session.establishment?['address']?.toString() ?? order['establishment']?['address']?.toString() ?? '';
+  final innerMm = narrow ? 52 : 74;
+  final bodyPx = narrow ? 17 : 14;
+  final brandPx = narrow ? 24 : 20;
+  final titlePx = narrow ? 18 : 16;
+  final totalPx = narrow ? 22 : 18;
+  final shopLine = narrow
+      ? _esc(shop)
+      : 'Établissement : ${_esc(shop)}${shopAddress.isEmpty ? '' : ' · ${_esc(shopAddress)}'}${shopPhone.isEmpty ? '' : ' · ${_esc(shopPhone)}'}';
   return '''
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=${paperMm}, initial-scale=1">
 <title>$title $number</title>
 <style>
-  body { font-family: Arial, sans-serif; color: #111; padding: 16px; max-width: 720px; margin: 0 auto; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  h2 { font-size: 16px; margin: 12px 0 16px; letter-spacing: 1px; }
-  p, td, th { font-size: 13px; }
-  table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; }
-  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid #ddd; }
-  th:last-child, td:last-child { text-align: right; }
-  .total { font-size: 18px; font-weight: 800; }
-  .muted { color: #555; }
-  .letterhead { border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 12px; font-size: 12px; line-height: 1.4; }
-  .letterhead .brand { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
-  @media print { .noprint { display: none; } body { padding: 0; } }
+  @page { size: ${paperMm}mm auto; margin: 2mm; }
+  * { box-sizing: border-box; }
+  html, body {
+    width: ${innerMm}mm;
+    max-width: ${innerMm}mm;
+    margin: 0 auto;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #000;
+    font-size: ${bodyPx}px;
+    line-height: 1.3;
+  }
+  h2 { font-size: ${titlePx}px; margin: 8px 0; letter-spacing: 0; }
+  p { margin: 4px 0 8px; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; }
+  th, td { text-align: left; padding: 4px 2px; border-bottom: 1px dashed #000; vertical-align: top; word-break: break-word; }
+  .qty { width: 12%; }
+  .amt { text-align: right; white-space: nowrap; }
+  .total { font-size: ${totalPx}px; font-weight: 800; margin-top: 8px; }
+  .muted { color: #222; }
+  .letterhead { border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
+  .letterhead .brand { font-size: ${brandPx}px; font-weight: 800; margin-bottom: 2px; }
+  @media print {
+    html, body { width: ${innerMm}mm; max-width: ${innerMm}mm; }
+  }
 </style>
 </head>
 <body>
-  ${ndjoCompanyHtml()}
-  <div class="muted">Établissement : ${_esc(shop)}${shopAddress.isEmpty ? '' : ' · ${_esc(shopAddress)}'}${shopPhone.isEmpty ? '' : ' · ${_esc(shopPhone)}'}</div>
+  ${ndjoCompanyHtml(compact: narrow)}
+  <div class="muted">$shopLine</div>
   <h2>$title ${_esc('$number')}</h2>
   <p>Client : ${_esc('$customer')}<br>
-  Téléphone : ${_esc(phone)}<br>
-  Type : ${_esc(type)} · Paiement : ${_esc(pay)}
+  Tél. : ${_esc(phone)}<br>
+  ${_esc(type)} · ${_esc(pay)}
   ${address.isEmpty ? '' : '<br>Adresse : ${_esc(address)}'}</p>
   $sections
   $totalsHtml
-  ${invoice && pdf != null ? '<p class="muted">Vérification : ${_esc(pdf)}</p>' : ''}
-  <p class="muted">${invoice ? 'Facture à conserver / à imprimer.' : 'Bon de commande interne et client — à imprimer localement.'}</p>
+  ${invoice && pdf != null && !narrow ? '<p class="muted">Vérification : ${_esc(pdf)}</p>' : ''}
   <script>setTimeout(function(){ try { window.focus(); window.print(); } catch (e) {} }, 350);</script>
 </body>
 </html>
@@ -422,23 +456,30 @@ class TicketPrintPreview extends StatefulWidget {
 
 class _TicketPrintPreviewState extends State<TicketPrintPreview> {
   bool sending = false;
+  int paperMm = defaultPrinterMm();
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _sendToPrinter());
+    loadPrinterMm().then((mm) {
+      if (mounted) setState(() => paperMm = mm);
+    });
+  }
+
+  Future<void> _setPaper(int mm) async {
+    await savePrinterMm(mm);
+    if (mounted) setState(() => paperMm = mm);
   }
 
   Future<void> _sendToPrinter() async {
     setState(() => sending = true);
     try {
       await printHtml(
-        ticketHtml(widget.session, widget.order, invoice: widget.invoice),
-        pdfUrl: widget.invoice ? ticketPdfUrl(widget.order) : null,
+        ticketHtml(widget.session, widget.order, invoice: widget.invoice, paperMm: paperMm),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Fenêtre d’impression ouverte. Choisissez l’imprimante ou Enregistrer en PDF.')),
+        SnackBar(content: Text('Impression ticket ${paperMm} mm. Dans le dialogue, choisissez l’imprimante thermique (échelle 100 %, pas A4).')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -458,8 +499,10 @@ class _TicketPrintPreviewState extends State<TicketPrintPreview> {
     final number = widget.invoice
         ? (ticketInvoiceOf(order)?['number'] ?? order['number'] ?? '')
         : (order['number'] ?? '');
+    final previewWidth = paperMm == 56 ? 280.0 : 380.0;
+    final textScale = paperMm == 56 ? 1.15 : 1.0;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFE8E8E8),
       appBar: AppBar(
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
@@ -473,41 +516,78 @@ class _TicketPrintPreviewState extends State<TicketPrintPreview> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         children: [
-          ndjoLetterhead(),
-          const SizedBox(height: 12),
-          Text('$title $number', style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.w800)),
+          const Text('Format imprimante thermique', style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(value: 80, label: Text('80 mm'), icon: Icon(Icons.print)),
+              ButtonSegment(value: 56, label: Text('56 mm POS'), icon: Icon(Icons.point_of_sale)),
+            ],
+            selected: {paperMm},
+            onSelectionChanged: (value) => _setPaper(value.first),
+          ),
           const SizedBox(height: 8),
           Text(
-            'Client : ${order['customerName'] ?? order['customer']?['name'] ?? '—'}\n'
-            'Tél. : ${ticketPhone(order) ?? '—'}\n'
-            '${ticketTypeLabel(order['type']?.toString())} · ${orderPayLabel(order)}',
-            style: const TextStyle(color: Colors.black87, height: 1.4),
+            paperMm == 56
+                ? 'Ticket élargi pour caisse Android 56 mm (plus de petit zoom A4).'
+                : 'Ticket 80 mm pour imprimante thermique standard.',
+            style: const TextStyle(color: NdjoColors.muted, fontSize: 13),
           ),
           const SizedBox(height: 16),
-          if (kitchen.isNotEmpty) ...[
-            const Text('Nourriture (cuisine)', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800)),
-            ...kitchen.map((item) => _printLine(item)),
-            const SizedBox(height: 8),
-          ],
-          if (drinks.isNotEmpty) ...[
-            const Text('Boissons (gestion interne)', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800)),
-            ...drinks.map((item) => _printLine(item)),
-            const SizedBox(height: 8),
-          ],
-          ...items.map((item) => _printLine(item)),
-          const Divider(color: Colors.black26),
-          Text(
-            'Total net ${fc((order['total'] as num?) ?? (ticketInvoiceOf(order)?['total'] as num?) ?? 0)}',
-            style: const TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.w800),
+          Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: previewWidth),
+              child: MediaQuery(
+                data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)),
+                child: Card(
+                  color: Colors.white,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ndjoLetterhead(compact: paperMm == 56),
+                        const SizedBox(height: 8),
+                        Text('$title $number', style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Client : ${order['customerName'] ?? order['customer']?['name'] ?? '—'}\n'
+                          'Tél. : ${ticketPhone(order) ?? '—'}\n'
+                          '${ticketTypeLabel(order['type']?.toString())} · ${orderPayLabel(order)}',
+                          style: const TextStyle(color: Colors.black87, height: 1.35),
+                        ),
+                        const SizedBox(height: 12),
+                        if (kitchen.isNotEmpty) ...[
+                          const Text('Nourriture', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800)),
+                          ...kitchen.map((item) => _printLine(item)),
+                          const SizedBox(height: 8),
+                        ],
+                        if (drinks.isNotEmpty) ...[
+                          const Text('Boissons', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800)),
+                          ...drinks.map((item) => _printLine(item)),
+                          const SizedBox(height: 8),
+                        ],
+                        ...items.map((item) => _printLine(item)),
+                        const Divider(color: Colors.black26),
+                        Text(
+                          'Total net ${fc((order['total'] as num?) ?? (ticketInvoiceOf(order)?['total'] as num?) ?? 0)}',
+                          style: const TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           if (sending) const LinearProgressIndicator(),
           FilledButton.icon(
             onPressed: sending ? null : _sendToPrinter,
             icon: const Icon(Icons.print),
-            label: Text(widget.invoice ? 'Imprimer / PDF facture' : 'Imprimer le bon'),
+            label: Text('Imprimer en ${paperMm} mm'),
           ),
         ],
       ),

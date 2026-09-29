@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'clear_stuck_data.dart';
 import 'export_file.dart';
+import 'printer_prefs.dart';
 import 'session.dart';
 import 'theme.dart';
 import 'time_fmt.dart';
@@ -940,6 +941,7 @@ class _ConfigPageState extends State<ConfigPage> {
   bool loading = true;
   String? error;
   String? lanHint;
+  int printerMm = defaultPrinterMm();
 
   static const labels = {
     'commandes_en_ligne_ouvertes': 'Commandes en ligne ouvertes',
@@ -959,6 +961,9 @@ class _ConfigPageState extends State<ConfigPage> {
     super.initState();
     _load();
     _loadLan();
+    loadPrinterMm().then((mm) {
+      if (mounted) setState(() => printerMm = mm);
+    });
   }
 
   @override
@@ -1054,6 +1059,26 @@ class _ConfigPageState extends State<ConfigPage> {
           const SizedBox(height: 8),
           Text('Tablettes : $lanHint', style: const TextStyle(color: NdjoColors.muted)),
         ],
+        const SizedBox(height: 24),
+        const Text('Imprimante thermique (cet appareil)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(value: 80, label: Text('80 mm')),
+            ButtonSegment(value: 56, label: Text('56 mm POS')),
+          ],
+          selected: {printerMm},
+          onSelectionChanged: (value) async {
+            final mm = value.first;
+            await savePrinterMm(mm);
+            if (mounted) setState(() => printerMm = mm);
+          },
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '80 mm : ticket classique. 56 mm : caisse Android POS, texte agrandi (évite le tout petit zoom).',
+          style: TextStyle(color: NdjoColors.muted),
+        ),
         const SizedBox(height: 20),
         ...controllers.entries.map((entry) {
           return Padding(

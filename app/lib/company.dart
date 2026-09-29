@@ -21,12 +21,20 @@ class NdjoCompany {
       ];
 }
 
-String ndjoCompanyHtml() {
+String ndjoCompanyHtml({bool compact = false}) {
   String esc(String value) => value
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;');
+  if (compact) {
+    return '''
+  <div class="letterhead">
+    <div class="brand">${esc(NdjoCompany.brand)}</div>
+    <div>${esc(NdjoCompany.phone)}</div>
+  </div>
+''';
+  }
   return '''
   <div class="letterhead">
     <div class="brand">${esc(NdjoCompany.brand)}</div>
@@ -46,7 +54,9 @@ Widget ndjoLetterhead({bool compact = false}) {
           const Text(NdjoCompany.brand, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: NdjoColors.accent)),
           const SizedBox(height: 6),
           const Text('Téléphone : ${NdjoCompany.phone}', style: TextStyle(fontSize: 12)),
-          const Text('ID. NAT. : ${NdjoCompany.idNat} · NIF : ${NdjoCompany.nif}', style: TextStyle(fontSize: 12)),
+          if (!compact) ...[
+            const Text('ID. NAT. : ${NdjoCompany.idNat} · NIF : ${NdjoCompany.nif}', style: TextStyle(fontSize: 12)),
+          ],
         ],
       ),
     ),

@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class Api {
   static const appVersion = '1.0.0';
-  static const appBuild = 8;
+  static const appBuild = 9;
 
   static String get appPlatform {
     if (kIsWeb) return 'web';
