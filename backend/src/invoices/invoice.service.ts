@@ -5,9 +5,11 @@ import { join } from 'path';
 import { PrismaService } from '../prisma.service';
 import { StockService } from '../stock/stock.service';
 import { companyPdfLines } from './company';
+import { pdfSafe } from '../export/pdf';
+import { isDrinkProduct } from '../orders/orders.service';
 
 function escapePdf(text: string) {
-  return text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  return pdfSafe(text).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 }
 
 function buildPdf(lines: string[]) {
@@ -47,10 +49,23 @@ export class InvoiceService {
   async issueForOrder(orderId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { items: true, establishment: true },
+      include: {
+        items: true,
+        establishment: true,
+        customer: { select: { name: true, phone: true } },
+      },
     });
     if (!order) return null;
     const existing = await this.prisma.invoice.findUnique({ where: { orderId } });
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: order.items.map((item) => item.productId) } },
+      include: { category: true },
+    });
+    const drinkIds = new Set(products.filter((row) => isDrinkProduct(row)).map((row) => row.id));
+    const kitchen = order.items.filter((item) => !drinkIds.has(item.productId));
+    const drinks = order.items.filter((item) => drinkIds.has(item.productId));
+    const lineOf = (item: (typeof order.items)[number]) =>
+      `${item.quantity} x ${item.name}  ${item.lineTotal} FC`;
 
     const verifyToken =
       existing?.verifyToken ??
@@ -66,9 +81,15 @@ export class InvoiceService {
       `Etablissement : ${order.establishment.name}`,
       `Facture ${existing?.number ?? order.number}`,
       `Commande ${order.number}`,
-      ...order.items.map(
-        (item) => `${item.quantity} x ${item.name}  ${item.lineTotal} FC`,
-      ),
+      `Client : ${order.customerName ?? order.customer?.name ?? '-'}`,
+      ...(kitchen.length
+        ? ['Nourriture :', ...kitchen.map(lineOf)]
+        : []),
+      ...(drinks.length
+        ? ['Boissons (interne) :', ...drinks.map(lineOf)]
+        : !kitchen.length
+          ? order.items.map(lineOf)
+          : []),
       `Sous-total : ${order.subtotal || order.total} FC`,
       ...(order.discountAmount > 0
         ? [

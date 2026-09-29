@@ -1,3 +1,3 @@
-void openExternal(String url) {}
+Future<void> openExternal(String url) async {}
 
-void printHtml(String html) {}
+Future<void> printHtml(String html, {String? pdfUrl}) async {}

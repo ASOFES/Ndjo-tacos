@@ -1,11 +1,11 @@
 import 'dart:html' as html;
 
-void openExternal(String url) {
+Future<void> openExternal(String url) async {
   html.window.open(url, '_blank');
 }
 
-void printHtml(String htmlDoc) {
-  final blob = html.Blob([htmlDoc], 'text/html');
+Future<void> printHtml(String htmlDoc, {String? pdfUrl}) async {
+  final blob = html.Blob([htmlDoc], 'text/html;charset=utf-8');
   final url = html.Url.createObjectUrlFromBlob(blob);
   html.window.open(url, '_blank');
 }
