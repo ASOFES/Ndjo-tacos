@@ -14,27 +14,39 @@ class NdjoDeliveryMap extends StatelessWidget {
     super.key,
     required this.viewId,
     this.location,
+    this.origin,
     this.destination,
     this.trail = const [],
     this.browseUrl,
+    this.navigateUrl,
     this.height = 220,
+    this.guide = false,
   });
 
   final String viewId;
   final Map<String, dynamic>? location;
+  final Map<String, dynamic>? origin;
   final Map<String, dynamic>? destination;
   final List<dynamic> trail;
   final String? browseUrl;
+  final String? navigateUrl;
   final double height;
+  final bool guide;
 
   @override
   Widget build(BuildContext context) {
     final markers = <OsmMarker>[
+      if (_point(origin) != null)
+        OsmMarker(
+          lat: _point(origin)!.lat,
+          lng: _point(origin)!.lng,
+          label: origin?['label']?.toString() ?? 'Restaurant',
+        ),
       if (_point(destination) != null)
         OsmMarker(
           lat: _point(destination)!.lat,
           lng: _point(destination)!.lng,
-          label: destination?['label']?.toString() ?? 'Destination',
+          label: destination?['label']?.toString() ?? 'Client',
         ),
       if (_point(location) != null)
         OsmMarker(
@@ -47,6 +59,14 @@ class NdjoDeliveryMap extends StatelessWidget {
       for (final item in trail)
         if (item is Map && _point(item) != null) _point(item)!,
     ];
+    if (path.isEmpty && _point(location) != null && _point(destination) != null) {
+      path.add(_point(location)!);
+      path.add(_point(destination)!);
+    } else if (path.isEmpty && _point(origin) != null && _point(destination) != null) {
+      path.add(_point(origin)!);
+      path.add(_point(destination)!);
+    }
+    final guideUrl = navigateUrl ?? browseUrl;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -59,13 +79,13 @@ class NdjoDeliveryMap extends StatelessWidget {
             path: path,
           ),
         ),
-        if (browseUrl != null && browseUrl!.isNotEmpty)
+        if (guideUrl != null && guideUrl.isNotEmpty)
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => openExternal(browseUrl!),
-              icon: const Icon(Icons.open_in_new, size: 16),
-              label: const Text('Ouvrir dans OpenStreetMap'),
+            child: FilledButton.tonalIcon(
+              onPressed: () => openExternal(guideUrl),
+              icon: const Icon(Icons.navigation, size: 18),
+              label: Text(guide ? 'Guider vers le client' : 'Ouvrir l’itinéraire'),
             ),
           ),
       ],

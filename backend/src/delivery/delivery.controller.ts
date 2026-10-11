@@ -36,8 +36,9 @@ export class DeliveryController {
 
   @Get()
   @RequirePermission('livraison.voir')
-  list(@Query('establishmentId') establishmentId: string) {
-    return this.delivery.list(establishmentId);
+  list(@Query('establishmentId') establishmentId: string, @Req() req: AuthedRequest) {
+    const driverId = req.user?.role === 'LIVREUR' ? req.user.sub : undefined;
+    return this.delivery.list(establishmentId, driverId);
   }
 
   @Post('availability')

@@ -2,22 +2,23 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { WhatsAppService } from '../notifications/whatsapp.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
-import { destinationOf, estimateEta, mapBrowseUrl, mapEmbedUrl, mapUrl } from '../tracking/geo';
+import { destinationOf, estimateEta, mapBrowseUrl, mapEmbedUrl, mapUrl, navigateUrl, originOf } from '../tracking/geo';
 import { createTrackingToken } from '../tracking/token';
 import { AuthedRequest, mustExist } from '../auth/scope';
 
 const driverSelect = {
   id: true,
   name: true,
+  username: true,
   phone: true,
   photoUrl: true,
   availability: true,
   status: true,
 } as const;
 
-function withDriverPhoto<T extends { name: string; photoUrl?: string | null }>(driver: T): T {
+function withDriverPhoto<T extends { name: string; username?: string; photoUrl?: string | null }>(driver: T): T {
   if (driver.photoUrl) return driver;
-  const name = encodeURIComponent(driver.name);
+  const name = encodeURIComponent(`${driver.name} ${driver.username ?? ''}`);
   return {
     ...driver,
     photoUrl: `https://ui-avatars.com/api/?name=${name}&background=1B5E20&color=fff`,
@@ -60,7 +61,8 @@ export class DeliveryService {
       orderBy: { createdAt: 'desc' },
       include: {
         deliveredBy: { select: { id: true, name: true } },
-        establishment: { select: { name: true, address: true } },
+        establishment: { select: { name: true, address: true, latitude: true, longitude: true } },
+        deliveryAddress: { select: { address: true, latitude: true, longitude: true } },
       },
     });
     const locations = await this.prisma.driverLocation.findMany({
@@ -70,7 +72,13 @@ export class DeliveryService {
     });
     const trailByOrder = groupTrailByOrder(locations);
     const last = locations.length ? locations[locations.length - 1] : null;
-    const latestDest = orders[0] ? destinationOf(orders[0]) : { latitude: -11.664, longitude: 27.479, label: 'Lubumbashi' };
+    const focus =
+      orders.find((row) => row.status === 'EN_LIVRAISON') ??
+      orders.find((row) => row.status === 'PRETE') ??
+      orders[0];
+    const latestDest = focus
+      ? destinationOf(focus)
+      : { latitude: -11.664, longitude: 27.479, label: 'Lubumbashi' };
     const courses = orders.map((order) =>
       this.courseSummary(order, trailByOrder.get(order.id) ?? []),
     );
@@ -86,8 +94,10 @@ export class DeliveryService {
       lastLocation: last ? pointJson(last) : null,
       trail: downsample(locations).map(pointJson),
       destination: latestDest,
+      origin: focus ? originOf(focus) : null,
       mapUrl: mapEmbedUrl(last, latestDest),
       mapBrowseUrl: mapBrowseUrl(last, latestDest),
+      navigateUrl: navigateUrl(latestDest, last ? pointJson(last) : originOf(focus ?? {})),
       courses,
       movements: [
         ...downsample(locations).map((point) => ({
@@ -107,14 +117,19 @@ export class DeliveryService {
     };
   }
 
-  async list(establishmentId: string) {
+  async list(establishmentId: string, driverId?: string) {
     const orders = await this.prisma.order.findMany({
-      where: { establishmentId, type: 'LIVRAISON' },
+      where: {
+        establishmentId,
+        type: 'LIVRAISON',
+        ...(driverId ? { driverId } : {}),
+      },
       include: {
         items: true,
         driver: { select: driverSelect },
         deliveredBy: { select: { id: true, name: true } },
-        establishment: { select: { name: true, address: true } },
+        establishment: { select: { name: true, address: true, latitude: true, longitude: true } },
+        deliveryAddress: { select: { address: true, latitude: true, longitude: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -187,7 +202,8 @@ export class DeliveryService {
         driver: { select: driverSelect },
         deliveredBy: { select: { id: true, name: true } },
         items: true,
-        establishment: { select: { name: true, address: true } },
+        establishment: { select: { name: true, address: true, latitude: true, longitude: true } },
+        deliveryAddress: { select: { address: true, latitude: true, longitude: true } },
       },
     });
     await this.prisma.user.update({
@@ -239,7 +255,8 @@ export class DeliveryService {
         driver: { select: driverSelect },
         deliveredBy: { select: { id: true, name: true } },
         items: true,
-        establishment: { select: { name: true, address: true } },
+        establishment: { select: { name: true, address: true, latitude: true, longitude: true } },
+        deliveryAddress: { select: { address: true, latitude: true, longitude: true } },
       },
     });
     await this.whatsapp.notify({
@@ -272,7 +289,8 @@ export class DeliveryService {
         driver: { select: driverSelect },
         deliveredBy: { select: { id: true, name: true } },
         items: true,
-        establishment: { select: { name: true, address: true } },
+        establishment: { select: { name: true, address: true, latitude: true, longitude: true } },
+        deliveryAddress: { select: { address: true, latitude: true, longitude: true } },
       },
     });
     if (order.trackingToken) {
@@ -382,7 +400,8 @@ export class DeliveryService {
         deliveredBy: { select: { id: true, name: true } },
         items: true,
         payments: true,
-        establishment: { select: { name: true, address: true } },
+        establishment: { select: { name: true, address: true, latitude: true, longitude: true } },
+        deliveryAddress: { select: { address: true, latitude: true, longitude: true } },
       },
     });
     if (order.driverId) {
@@ -417,6 +436,15 @@ export class DeliveryService {
   ) {
     if (body.latitude == null || body.longitude == null) {
       throw new BadRequestException('Coordonnées GPS requises');
+    }
+    if (body.orderId) {
+      const owned = await this.prisma.order.findUnique({
+        where: { id: body.orderId },
+        select: { driverId: true },
+      });
+      if (owned && owned.driverId && owned.driverId !== userId) {
+        throw new BadRequestException('Cette course est affectée à un autre livreur.');
+      }
     }
     const point = await this.prisma.driverLocation.create({
       data: {
@@ -526,7 +554,9 @@ export class DeliveryService {
         ? withDriverPhoto(order.driver as { name: string; photoUrl?: string | null })
         : null,
       items: order.items ?? [],
+      origin: originOf(order),
       destination: dest,
+      navigateUrl: navigateUrl(dest, location ?? originOf(order)),
       location: location
         ? {
             latitude: location.latitude,
@@ -579,12 +609,14 @@ export class DeliveryService {
       durationMinutes: durationMinutes(order.departedAt, order.arrivedAt ?? order.deliveredAt),
       total: order.total,
       deliveredBy: order.deliveredBy ?? null,
+      origin: originOf(order),
       destination: dest,
       location: last ? pointJson(last) : null,
       trail: downsample(trail).map(pointJson),
       movements: movementHistory(order, trail),
       mapUrl: mapEmbedUrl(last, dest),
       mapBrowseUrl: mapBrowseUrl(last, dest),
+      navigateUrl: navigateUrl(dest, last ? pointJson(last) : originOf(order)),
     };
   }
 

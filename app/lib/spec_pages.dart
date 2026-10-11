@@ -9,6 +9,7 @@ import 'pages.dart';
 import 'session.dart';
 import 'theme.dart';
 import 'ticket.dart';
+import 'open_link.dart';
 import 'osm_map.dart';
 import 'time_fmt.dart';
 
@@ -616,7 +617,7 @@ class _DeliveryPageState extends State<DeliveryPage> {
     });
     if (widget.session.role == 'LIVREUR') {
       _markOnline();
-      _gpsTimer = Timer.periodic(const Duration(seconds: 15), (_) => _pushActiveGps());
+      _gpsTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pushActiveGps());
     }
   }
 
@@ -719,9 +720,12 @@ class _DeliveryPageState extends State<DeliveryPage> {
   Future<void> _pushActiveGps() async {
     final gps = await currentGps();
     if (gps == null || !mounted) return;
+    final me = widget.session.user?['id']?.toString();
     for (final item in deliveries) {
       final order = Map<String, dynamic>.from(item as Map);
-      if (order['status'] != 'EN_LIVRAISON') continue;
+      final mine = order['driver']?['id']?.toString() == me || order['driverId']?.toString() == me;
+      if (!mine) continue;
+      if (order['status'] != 'EN_LIVRAISON' && order['status'] != 'PRETE') continue;
       try {
         if (widget.session.sync != null) {
           await _syncEvent('location', order['id'].toString(), gps);
@@ -852,21 +856,20 @@ class _DeliveryPageState extends State<DeliveryPage> {
                   Text('${data['phone'] ?? '—'} · ${_driverStatus(data['availability']?.toString())}'),
                   Text('Courses : ${data['stats']?['total'] ?? 0} · livrées ${data['stats']?['delivered'] ?? 0} · actives ${data['stats']?['active'] ?? 0}'),
                   const SizedBox(height: 16),
-                  NdjoMovementHistory(movements: movements, formatTime: _fmt),
-                  const SizedBox(height: 8),
-                  FilledButton.icon(
-                    onPressed: () => _openMap({
-                      'location': data['lastLocation'],
-                      'destination': data['destination'],
-                      'trail': data['trail'],
-                      'mapBrowseUrl': data['mapBrowseUrl'],
-                      'number': data['name'],
-                    }),
-                    icon: const Icon(Icons.map),
-                    label: const Text('Voir la carte'),
+                  NdjoDeliveryMap(
+                    viewId: 'driver-${data['id']}',
+                    location: data['lastLocation'] as Map<String, dynamic>?,
+                    origin: data['origin'] as Map<String, dynamic>?,
+                    destination: data['destination'] as Map<String, dynamic>?,
+                    trail: data['trail'] as List<dynamic>? ?? const [],
+                    browseUrl: data['mapBrowseUrl']?.toString(),
+                    navigateUrl: data['navigateUrl']?.toString(),
+                    height: 260,
                   ),
+                  const SizedBox(height: 12),
+                  NdjoMovementHistory(movements: movements, formatTime: _fmt),
                   const SizedBox(height: 16),
-                  const Text('Courses', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+                  const Text('Courses enregistrées', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
                   if (courses.isEmpty)
                     const Padding(
                       padding: EdgeInsets.only(top: 8),
@@ -883,6 +886,17 @@ class _DeliveryPageState extends State<DeliveryPage> {
                           Text(
                             '${course['address'] ?? ''} · ${_fmtDuration(course['durationMinutes'])}',
                             style: const TextStyle(color: NdjoColors.muted, fontSize: 12),
+                          ),
+                          const SizedBox(height: 6),
+                          NdjoDeliveryMap(
+                            viewId: 'course-${course['id'] ?? course['number']}',
+                            location: course['location'] as Map<String, dynamic>?,
+                            origin: course['origin'] as Map<String, dynamic>?,
+                            destination: course['destination'] as Map<String, dynamic>?,
+                            trail: course['trail'] as List<dynamic>? ?? const [],
+                            browseUrl: course['mapBrowseUrl']?.toString(),
+                            navigateUrl: course['navigateUrl']?.toString(),
+                            height: 180,
                           ),
                           const SizedBox(height: 6),
                           NdjoMovementHistory(movements: _deliveryMovements(course), formatTime: _fmt),
@@ -917,13 +931,19 @@ class _DeliveryPageState extends State<DeliveryPage> {
                 Text(order['address']?.toString() ?? ''),
                 Text('Livreur : ${order['driver']?['name'] ?? 'Non affecté'}'),
                 const SizedBox(height: 16),
-                NdjoMovementHistory(movements: _deliveryMovements(order), formatTime: _fmt),
-                const SizedBox(height: 8),
-                FilledButton.icon(
-                  onPressed: () => _openMap(order),
-                  icon: const Icon(Icons.map),
-                  label: const Text('Voir la carte'),
+                NdjoDeliveryMap(
+                  viewId: 'order-profile-${order['id'] ?? order['number']}',
+                  location: order['location'] as Map<String, dynamic>?,
+                  origin: order['origin'] as Map<String, dynamic>?,
+                  destination: order['destination'] as Map<String, dynamic>?,
+                  trail: order['trail'] as List<dynamic>? ?? const [],
+                  browseUrl: order['mapBrowseUrl']?.toString(),
+                  navigateUrl: order['navigateUrl']?.toString() ?? _guideUrl(order),
+                  height: 280,
+                  guide: widget.session.role == 'LIVREUR',
                 ),
+                const SizedBox(height: 12),
+                NdjoMovementHistory(movements: _deliveryMovements(order), formatTime: _fmt),
               ],
             ),
           );
@@ -995,6 +1015,18 @@ class _DeliveryPageState extends State<DeliveryPage> {
     await _run(() => _syncEvent('assign', order['id'].toString(), {'driverId': chosen}));
   }
 
+  String? _guideUrl(Map<String, dynamic> order) {
+    final fromApi = order['navigateUrl']?.toString() ?? order['mapBrowseUrl']?.toString();
+    if (fromApi != null && fromApi.isNotEmpty) return fromApi;
+    final address = order['address']?.toString() ?? order['destination']?['label']?.toString() ?? '';
+    if (address.isEmpty) return null;
+    return Uri.https('www.google.com', '/maps/dir/', {
+      'api': '1',
+      'destination': '$address, Lubumbashi, Haut-Katanga, RDC',
+      'travelmode': 'driving',
+    }).toString();
+  }
+
   void _openMap(Map<String, dynamic> data) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -1005,10 +1037,13 @@ class _DeliveryPageState extends State<DeliveryPage> {
             child: NdjoDeliveryMap(
               viewId: 'map-${data['id'] ?? data['number'] ?? 'livraison'}',
               location: data['location'] as Map<String, dynamic>? ?? data['lastLocation'] as Map<String, dynamic>?,
+              origin: data['origin'] as Map<String, dynamic>?,
               destination: data['destination'] as Map<String, dynamic>?,
               trail: data['trail'] as List<dynamic>? ?? const [],
               browseUrl: data['mapBrowseUrl']?.toString(),
+              navigateUrl: data['navigateUrl']?.toString() ?? _guideUrl(data),
               height: MediaQuery.sizeOf(context).height - 160,
+              guide: widget.session.role == 'LIVREUR',
             ),
           ),
         ),
@@ -1093,6 +1128,12 @@ class _DeliveryPageState extends State<DeliveryPage> {
                         icon: const Icon(Icons.map, size: 16),
                         label: const Text('Carte'),
                       ),
+                      if (order['driver'] != null && _guideUrl(order) != null)
+                        FilledButton.icon(
+                          onPressed: () => openExternal(_guideUrl(order)!),
+                          icon: const Icon(Icons.navigation, size: 16),
+                          label: const Text('Guider'),
+                        ),
                       if (!isDriver && order['driver'] == null)
                         FilledButton(onPressed: () => _assignOrder(order), child: const Text('Affecter')),
                       if (order['status'] == 'PRETE' && order['driver'] != null)

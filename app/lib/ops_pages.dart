@@ -247,7 +247,13 @@ class _UsersPageState extends State<UsersPage> {
               children: [
                 TextField(controller: name, decoration: const InputDecoration(labelText: 'Nom')),
                 TextField(controller: username, decoration: const InputDecoration(labelText: 'Nom utilisateur')),
-                TextField(controller: password, obscureText: true, decoration: InputDecoration(labelText: current == null ? 'Mot de passe' : 'Nouveau mot de passe (optionnel)')),
+                TextField(
+                  controller: password,
+                  obscureText: false,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  decoration: InputDecoration(labelText: current == null ? 'Mot de passe' : 'Nouveau mot de passe (optionnel)'),
+                ),
                 TextField(controller: phone, decoration: const InputDecoration(labelText: 'Téléphone')),
                 TextField(controller: photoUrl, decoration: const InputDecoration(labelText: 'Photo (URL)')),
                 const SizedBox(height: 8),
@@ -313,8 +319,21 @@ class _UsersPageState extends State<UsersPage> {
           children: [
             Text('Compte : ${current['username']}', style: const TextStyle(color: NdjoColors.muted)),
             const SizedBox(height: 8),
-            TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Nouveau mot de passe')),
-            TextField(controller: confirm, obscureText: true, decoration: const InputDecoration(labelText: 'Confirmer')),
+            TextField(
+              controller: password,
+              obscureText: false,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: const InputDecoration(labelText: 'Nouveau mot de passe'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: confirm,
+              obscureText: false,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: const InputDecoration(labelText: 'Confirmer'),
+            ),
           ],
         ),
         actions: [
@@ -326,8 +345,13 @@ class _UsersPageState extends State<UsersPage> {
     if (ok != true) return;
     if (password.text.trim().length < 4 || password.text != confirm.text) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mot de passe trop court ou confirmation différente.')),
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Mot de passe non enregistré'),
+          content: const Text('Le mot de passe doit avoir au moins 4 caractères et les deux champs doivent être identiques.'),
+          actions: [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+        ),
       );
       return;
     }
@@ -344,10 +368,26 @@ class _UsersPageState extends State<UsersPage> {
         'password': password.text,
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mot de passe mis à jour.')));
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Mot de passe modifié'),
+          content: Text('Le mot de passe de ${current['name']} (${current['username']}) a bien été enregistré.'),
+          actions: [
+            FilledButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+          ],
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Échec'),
+          content: Text('$e'),
+          actions: [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+        ),
+      );
     }
   }
 
