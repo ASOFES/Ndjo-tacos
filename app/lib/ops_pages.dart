@@ -288,12 +288,104 @@ class _UsersPageState extends State<UsersPage> {
       'departmentId': departmentId,
       if (password.text.isNotEmpty) 'password': password.text,
     };
-    if (current == null) {
-      await widget.session.api.post('/users', body);
-    } else {
-      await widget.session.api.put('/users/${current['id']}', body);
+    try {
+      if (current == null) {
+        await widget.session.api.post('/users', body);
+      } else {
+        await widget.session.api.put('/users/${current['id']}', body);
+      }
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
-    await _load();
+  }
+
+  Future<void> _changePassword(Map<String, dynamic> current) async {
+    final password = TextEditingController();
+    final confirm = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Mot de passe · ${current['name']}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Compte : ${current['username']}', style: const TextStyle(color: NdjoColors.muted)),
+            const SizedBox(height: 8),
+            TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Nouveau mot de passe')),
+            TextField(controller: confirm, obscureText: true, decoration: const InputDecoration(labelText: 'Confirmer')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Enregistrer')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    if (password.text.trim().length < 4 || password.text != confirm.text) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mot de passe trop court ou confirmation différente.')),
+      );
+      return;
+    }
+    try {
+      await widget.session.api.put('/users/${current['id']}', {
+        'name': current['name'],
+        'username': current['username'],
+        'role': current['role'],
+        'phone': current['phone'],
+        'photoUrl': current['photoUrl'],
+        'establishmentId': current['establishmentId'] ?? _id,
+        'departmentId': current['departmentId'],
+        'status': current['status'] ?? 'ACTIF',
+        'password': password.text,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mot de passe mis à jour.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _delete(Map<String, dynamic> current) async {
+    final me = widget.session.user?['id']?.toString();
+    if (current['id']?.toString() == me) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vous ne pouvez pas supprimer votre propre compte.')),
+      );
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer l’utilisateur'),
+        content: Text(
+          'Supprimer ${current['name']} (${current['username']}) ?\nLe compte ne pourra plus se connecter. L’historique (ventes, livraisons) est conservé.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: NdjoColors.danger),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.session.api.delete('/users/${current['id']}');
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Utilisateur supprimé.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 
   @override
@@ -335,7 +427,26 @@ class _UsersPageState extends State<UsersPage> {
               title: Text(map['name'].toString()),
               subtitle: Text('${map['username']} · ${map['role']} · ${map['department']?['name'] ?? 'Sans département'}\n${formatRecordWhen(map)}'),
               isThreeLine: true,
-              trailing: IconButton(onPressed: () => _edit(map), icon: const Icon(Icons.edit)),
+              trailing: Wrap(
+                spacing: 0,
+                children: [
+                  IconButton(
+                    tooltip: 'Modifier',
+                    onPressed: () => _edit(map),
+                    icon: const Icon(Icons.edit),
+                  ),
+                  IconButton(
+                    tooltip: 'Mot de passe',
+                    onPressed: () => _changePassword(map),
+                    icon: const Icon(Icons.password),
+                  ),
+                  IconButton(
+                    tooltip: 'Supprimer',
+                    onPressed: () => _delete(map),
+                    icon: const Icon(Icons.delete_outline, color: NdjoColors.danger),
+                  ),
+                ],
+              ),
             ),
           );
         }),

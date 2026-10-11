@@ -1,7 +1,10 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  NotFoundException,
   Param,
   Post,
   Put,
@@ -9,6 +12,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma.service';
 import { SiteProvisionService } from '../organization/site-provision.service';
 import { JwtGuard } from '../auth/jwt.guard';
@@ -76,7 +80,10 @@ export class OrganizationController {
   @RequirePermission('users.voir')
   async users(@Query('establishmentId') establishmentId?: string) {
     const users = await this.prisma.user.findMany({
-      where: establishmentId ? { establishmentId } : undefined,
+      where: {
+        status: { not: 'INACTIF' },
+        ...(establishmentId && establishmentId !== 'ALL' ? { establishmentId } : {}),
+      },
       include: {
         establishment: true,
         department: true,
@@ -121,6 +128,7 @@ export class OrganizationController {
       where: { id },
       data: {
         name: body.name,
+        ...(body.username ? { username: String(body.username).trim() } : {}),
         role: body.role,
         phone: body.phone,
         photoUrl: body.photoUrl,
@@ -135,6 +143,46 @@ export class OrganizationController {
     });
     await this.audit(req.user.sub, 'MODIFIER', 'UTILISATEUR', user.name);
     return this.safe(user);
+  }
+
+  @Delete('users/:id')
+  @RequirePermission('users.creer')
+  async deleteUser(@Param('id') id: string, @Req() req: { user: { sub: string } }) {
+    if (id === req.user.sub) {
+      throw new BadRequestException('Vous ne pouvez pas supprimer votre propre compte.');
+    }
+    const target = await this.prisma.user.findUnique({ where: { id } });
+    if (!target || target.status === 'INACTIF') {
+      throw new NotFoundException('Utilisateur introuvable');
+    }
+    if (['SUPER_ADMIN', 'ADMIN'].includes(target.role)) {
+      const remainingAdmins = await this.prisma.user.count({
+        where: {
+          id: { not: id },
+          status: 'ACTIF',
+          role: { in: ['SUPER_ADMIN', 'ADMIN'] },
+        },
+      });
+      if (remainingAdmins === 0) {
+        throw new BadRequestException('Impossible de supprimer le dernier administrateur.');
+      }
+    }
+    const bcrypt = await import('bcryptjs');
+    await this.prisma.refreshToken.deleteMany({ where: { userId: id } });
+    await this.prisma.driverLocation.deleteMany({ where: { driverId: id } });
+    await this.prisma.order.updateMany({ where: { driverId: id }, data: { driverId: null } });
+    await this.prisma.order.updateMany({ where: { deliveredById: id }, data: { deliveredById: null } });
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        status: 'INACTIF',
+        availability: 'HORS_LIGNE',
+        username: `${target.username}.deleted.${Date.now()}`,
+        passwordHash: await bcrypt.hash(randomBytes(24).toString('hex'), 10),
+      },
+    });
+    await this.audit(req.user.sub, 'SUPPRIMER', 'UTILISATEUR', `${target.name} (${target.username})`);
+    return { deleted: true, id };
   }
 
   private async saveEstablishment(body: any, userId: string, action: string) {
