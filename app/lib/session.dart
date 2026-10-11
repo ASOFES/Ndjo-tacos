@@ -21,6 +21,7 @@ class Session extends ChangeNotifier {
   String? selectedEstablishmentId;
   bool ready = false;
   bool clientMode = false;
+  bool sessionExpiredNotice = false;
   Timer? _hb;
 
   String? get role => user?['role']?.toString();
@@ -50,6 +51,7 @@ class Session extends ChangeNotifier {
     api.token = prefs.getString('token');
     api.refreshToken = prefs.getString('refreshToken');
     api.onRefresh = _refreshTokens;
+    api.onAuthLost = _onAuthLost;
     _restoreLocal(prefs);
     appUpdate = {'updateAvailable': false};
     sync?.onQueueChanged = _onSyncQueue;
@@ -81,7 +83,11 @@ class Session extends ChangeNotifier {
       if (id != null) await sync?.pull(id);
       await _heartbeat();
       notifyListeners();
-    } catch (_) {
+    } catch (e) {
+      if ('$e'.toLowerCase().contains('session')) {
+        await _onAuthLost();
+        return;
+      }
       if (user == null) {
         api.token = null;
         await prefs.remove('token');
@@ -98,6 +104,8 @@ class Session extends ChangeNotifier {
     api.token = result['token'] as String;
     api.refreshToken = result['refreshToken'] as String?;
     api.onRefresh = _refreshTokens;
+    api.onAuthLost = _onAuthLost;
+    sessionExpiredNotice = false;
     user = result['user'] as Map<String, dynamic>;
     establishment = user?['establishment'] as Map<String, dynamic>?;
     selectedEstablishmentId = establishment?['id']?.toString();
@@ -215,13 +223,25 @@ class Session extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    _hb?.cancel();
-    _hb = null;
-    if (api.refreshToken != null) {
+    final refresh = api.refreshToken;
+    if (refresh != null) {
       try {
-        await api.post('/auth/logout', {'refreshToken': api.refreshToken});
+        await api.post('/auth/logout', {'refreshToken': refresh});
       } catch (_) {}
     }
+    sessionExpiredNotice = false;
+    await _clearLocalAuth();
+  }
+
+  Future<void> _onAuthLost() async {
+    if (api.token == null && user == null) return;
+    sessionExpiredNotice = true;
+    await _clearLocalAuth();
+  }
+
+  Future<void> _clearLocalAuth() async {
+    _hb?.cancel();
+    _hb = null;
     api.token = null;
     api.refreshToken = null;
     user = null;

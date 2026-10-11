@@ -11,6 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma.service';
 import { JwtGuard } from './jwt.guard';
+import { jwtAccessTtl, jwtRefreshTtlMs } from './ttl';
 import { PermissionService } from './permission.service';
 import * as bcrypt from 'bcryptjs';
 
@@ -46,7 +47,10 @@ export class AuthController {
 
   @Post('refresh')
   async refresh(@Body() body: { refreshToken?: string }) {
-    const raw = body.refreshToken ?? '';
+    const raw = (body.refreshToken ?? '').trim();
+    if (!raw) {
+      throw new UnauthorizedException('Session expirée');
+    }
     const tokenHash = hashToken(raw);
     const stored = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },
@@ -55,10 +59,6 @@ export class AuthController {
     if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
       throw new UnauthorizedException('Session expirée');
     }
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: { revokedAt: new Date() },
-    });
     if (stored.user.status !== 'ACTIF') {
       throw new UnauthorizedException('Compte désactivé');
     }
@@ -69,7 +69,26 @@ export class AuthController {
       });
       stored.user.availability = 'DISPONIBLE';
     }
-    return this.issueSession(stored.user);
+    await this.prisma.refreshToken.update({
+      where: { id: stored.id },
+      data: { expiresAt: new Date(Date.now() + jwtRefreshTtlMs()) },
+    });
+    const accessToken = this.jwt.sign(
+      {
+        sub: stored.user.id,
+        username: stored.user.username,
+        role: stored.user.role,
+        establishmentId: stored.user.establishmentId,
+        typ: 'access',
+      },
+      { expiresIn: jwtAccessTtl() as `${number}d` },
+    );
+    return {
+      token: accessToken,
+      refreshToken: raw,
+      expiresIn: jwtAccessTtl(),
+      user: await this.presentUser(stored.user),
+    };
   }
 
   @Post('logout')
@@ -145,21 +164,20 @@ export class AuthController {
         establishmentId: user.establishmentId,
         typ: 'access',
       },
-      { expiresIn: (process.env.JWT_ACCESS_TTL ?? '7d') as `${number}d` },
+      { expiresIn: jwtAccessTtl() as `${number}d` },
     );
     const refreshToken = randomBytes(48).toString('hex');
-    const days = Number((process.env.JWT_REFRESH_TTL ?? '7d').replace('d', '')) || 7;
     await this.prisma.refreshToken.create({
       data: {
         tokenHash: hashToken(refreshToken),
         userId: user.id,
-        expiresAt: new Date(Date.now() + days * 86400000),
+        expiresAt: new Date(Date.now() + jwtRefreshTtlMs()),
       },
     });
     return {
       token: accessToken,
       refreshToken,
-      expiresIn: process.env.JWT_ACCESS_TTL ?? '7d',
+      expiresIn: jwtAccessTtl(),
       user: await this.presentUser(user),
     };
   }

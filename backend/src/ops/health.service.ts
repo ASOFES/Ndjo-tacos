@@ -78,7 +78,7 @@ export class HealthService {
           : 'sqlite',
         databaseName,
         databaseVersion,
-        jwtAccessTtl: process.env.JWT_ACCESS_TTL ?? '7d',
+        jwtAccessTtl: process.env.JWT_ACCESS_TTL ?? '30d',
         httpsRequired: process.env.NODE_ENV === 'production',
         lan: lanInfo(Number(process.env.PORT ?? 3000), Number(process.env.WEB_PORT ?? 5192)),
       },

@@ -93,6 +93,7 @@ class Api {
   String? token;
   String? refreshToken;
   Future<bool> Function()? onRefresh;
+  Future<void> Function()? onAuthLost;
   Future<bool>? _refreshing;
 
   Map<String, String> _headers({bool auth = true}) {
@@ -184,8 +185,14 @@ class Api {
     try {
       var response = await request().timeout(timeout);
       if (response.statusCode == 401 && onRefresh != null && !skipRefresh) {
-        final ok = await _refreshOnce();
-        if (ok) response = await request().timeout(timeout);
+        if (_isSessionAuthError(_peekMessage(response))) {
+          final ok = await _refreshOnce();
+          if (ok) {
+            response = await request().timeout(timeout);
+          } else {
+            await onAuthLost?.call();
+          }
+        }
       }
       return response;
     } on TimeoutException {
@@ -215,6 +222,19 @@ class Api {
     }
     if (decoded is Map<String, dynamic>) return decoded;
     return {'data': decoded};
+  }
+
+  String _peekMessage(http.Response response) {
+    try {
+      return _message(jsonDecode(response.body));
+    } catch (_) {
+      return 'Session expirée';
+    }
+  }
+
+  bool _isSessionAuthError(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('session expir') || lower.contains('session requise');
   }
 
   String _message(dynamic decoded) {

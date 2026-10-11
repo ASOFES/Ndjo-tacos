@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaService } from './prisma.service';
 import { JwtGuard } from './auth/jwt.guard';
+import { jwtAccessTtl } from './auth/ttl';
 import { AuthController } from './auth/auth.controller';
 import { CatalogController } from './catalog/catalog.controller';
 import { CatalogService } from './catalog/catalog.service';
@@ -55,7 +56,7 @@ import { ExportService } from './export/export.service';
     }),
     JwtModule.register({
       secret: process.env.JWT_SECRET ?? 'ndjo-tacos-dev-secret',
-      signOptions: { expiresIn: (process.env.JWT_ACCESS_TTL ?? '7d') as `${number}d` },
+      signOptions: { expiresIn: jwtAccessTtl() as `${number}d` },
     }),
   ],
   controllers: [

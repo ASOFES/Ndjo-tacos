@@ -342,6 +342,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Text('NDJO TACOS', textAlign: TextAlign.center, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: NdjoColors.primary)),
                   const SizedBox(height: 6),
                   const Text('Connexion', textAlign: TextAlign.center, style: TextStyle(color: NdjoColors.muted)),
+                  if (widget.session.sessionExpiredNotice) ...[
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Session expirée. Reconnectez-vous pour continuer.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: NdjoColors.danger, fontWeight: FontWeight.w700),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   if (!_publicSite) ...[
                     TextField(
